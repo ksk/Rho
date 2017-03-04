@@ -418,7 +418,7 @@ let speclist = make_speclist [
   "Show the number of arguments (m = #args of fst arg, n = #args except fst args)";
   ["-n"], Arg.String(fun i-> check_max := num_of_string i),
   "Limit number of self applications (default = "^string_of_num !check_max^")";
-  ["-nl";"-no-limit"], Arg.Unit(fun() -> check_max := ?/ max_int */ ?/ max_int),
+  ["-m";"-no-limit"], Arg.Unit(fun() -> check_max := ?/ max_int */ ?/ max_int),
   "Keep on trying self applications unless the rho-property is found";
   ["-l";"-list"], Arg.Unit(fun() ->
                    CombMap.iter

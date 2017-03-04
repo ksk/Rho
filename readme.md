@@ -37,7 +37,7 @@ where `\x[...]` represents &lambda;-abstraction.
 This syntax of &lambda;-abstraction can be used for combinators given by users.
 Use the `-q` option for the quiet mode.
 Although the program only checks first 65535 terms by default,
-add the `-nl` option for keeping on trying to find the cycle.
+add the `-m` option for keeping on trying to find the cycle.
 Run
 ```
 $ rho -h
