@@ -16,8 +16,6 @@ Both can be built just by `make`.
 ## Program `rho`
 
 The program `rho` checks the &rho;-property of arbitrary combinators.
-The implementation is based on the Floyd's (also called tortoise-and-hare) semi-algorithm
-for finding cycles with constant memory usage.
 For example, the &rho;-property of B, B<sub>10</sub> = B<sub>6</sub>, is
 checked by
 ```
@@ -38,6 +36,9 @@ This syntax of &lambda;-abstraction can be used for combinators given by users.
 Use the `-q` option for the quiet mode.
 Although the program only checks first 65535 terms by default,
 add the `-m` option for keeping on trying to find the cycle.
+Using the `-fx` option,
+the Floyd's (also called tortoise-and-hare) semi-algorithm is used
+for finding cycles with constant memory usage.
 Run
 ```
 $ rho -h
@@ -64,6 +65,7 @@ $ bfast 2
 which results in (B<sup>2</sup> B)<sub>294</sub> = (B<sup>2</sup> B)<sub>258</sub>
 with the history of computation over the list representation.
 Command line options similar to those of `rho` are available.
+It is better to use the `-fx` option for larger n.
 Run
 ```
 $ bfast -h

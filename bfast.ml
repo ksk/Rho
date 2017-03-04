@@ -10,7 +10,7 @@ type equality = Exact | ExactArray of int | ExactHash
                 | PartStore of int * int * int * int
                 | HashRecomp of int | UseFS of string
 type display = Quiet | Verbose | Show of howshow list | Every of int
-let mode = ref FloydExt
+let mode = ref Naive
 let gc_mask = ref (-1)
 let equality = ref Exact
 let display = ref Verbose
