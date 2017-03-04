@@ -9,7 +9,6 @@ opt: rho.opt bfast.opt
 install: opt
 	install rho.opt ${HOME}/bin/rho
 	install bfast.opt ${HOME}/bin/bfast
-	install bdec.opt ${HOME}/bin/bdec
 
 rho: rho.bin; @true
 rho.bin: rho.ml
