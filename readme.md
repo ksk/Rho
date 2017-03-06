@@ -84,6 +84,6 @@ for details of command line options.
 
 Keisuke Nakano conjectured in 2003 that
 
-> A B-term has the &rho;-property if and only if it is equivalent to B<sup>n</sup> B with some n.
+> a B-term has the &rho;-property if and only if it is equivalent to B<sup>n</sup> B with some n.
 
-and the both directions are still open.
+in which if-part and only-if-part are both still open.
