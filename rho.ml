@@ -1,19 +1,21 @@
 open Format
-open Num
+open Store
+open Cycle
+
 (* slim expression *)
 type expr = Index of int | Lambda of int * expr | App of expr * expr
 (* Lambda(N,exp) ... N nested lambda abstraction *)
 (* \lambda(\lambda(...(\lambda exp)...)) *)
 
-type algorithm = Naive | Floyd | FloydExt
+type algorithm = Naive | Floyd
 
 (* Num operators *)
-let (?/) = num_of_int
-let (!/) = string_of_num
-let (%/) = mod_num
+(* let (?/) = num_of_int *)
+(* let (!/) = string_of_num *)
+(* let (%/) = mod_num *)
 
 (* Variables for command-line options *)
-let check_max = ref (?/ 65535)
+let limit = ref 65535
 let expr_str = ref ""
 let init_exp = ref (Lambda(1,Index 1))
 let no_eta = ref false
@@ -21,7 +23,7 @@ let loop_detection = ref Naive
 let show_argnum = ref false
 let show_bintree = ref false
 let bind_vars = ref false
-type display = Quiet | Verbose | Every of num
+type display = Quiet | Verbose | Every of int
 let display = ref Verbose
 
 let rec unwrap_lambda = function
@@ -207,13 +209,17 @@ let many_app init e n =
   loop init n
 
 let self_app e n = many_app e e (pred n) 
-  
-external compare_expr : expr -> expr -> int = "%compare"
-(* let compare_expr (e1:expr) (e2:expr) = *)
-(*   let c = compare (Hashtbl.hash e1) (Hashtbl.hash e2) in *)
-(*   if c = 0 then compare e1 e2 else c *)
-module Exprs = Map.Make (struct type t = expr let compare = compare_expr end) 
 
+
+module Expr = struct
+  type t = expr
+  let equal = (=)
+  let compare = compare
+  let hash = Hashtbl.hash
+end
+module MapStore = MakeMapStore(Expr)
+module HashtblStore = MakeHashtblStore(Expr)
+  
 let argnum_str exp =
   if !show_argnum then
     let l, body = match exp with Lambda(l,b) -> l,b | _ -> 0,exp in
@@ -225,104 +231,33 @@ let argnum_str exp =
 let print_state i e = match !display with
   | Quiet -> ()
   | Verbose ->
-    printf "%3s%s => %s@." !/i (argnum_str e) (string_of_expr e);
+    printf "%3d%s => %s@." i (argnum_str e) (string_of_expr e);
     if !show_bintree then print_bin e
   | Every cycle ->
-      if i%/cycle =/ ?/0 then eprintf "\r%s... %!" !/i
+      if i/cycle = 0 then eprintf "\r%d... %!" i
 
 let rho_check init e =
-  let e = normalize e in
-  let init = normalize init in
-  let rec loop last i es =
-    if i >/ !check_max then begin
-      if !check_max >/ ?/1 then printf "%s terms are all different.@." !/ !check_max
-    end else
-      let next = normalize_app last e in
-      try let found_num = Exprs.find next es in
-      printf "%s (%s = %s) [%s]\n%!" "Found! "
-        !/i !/found_num !/(i-/found_num)
-      with Not_found ->
-        print_state i next;
-        loop next (succ_num i) (Exprs.add next i es) in
-  let init_e = normalize_app init e in
-  printf "%3d%s => %s\n%!" 1 (argnum_str init_e) (string_of_expr init_e);
-  loop init_e ?/2 (Exprs.add init_e ?/1 Exprs.empty)
+  let module N = (Naive (struct
+                          type t = expr
+                          let limit = !limit
+                          let next x = normalize_app x e
+                          let equal = (=)
+                          let display = print_state
+                        end) (HashtblStore)) in
+  N.find_cycle init
 
 (* Using Floyd's cycle finding algorithm *)
 let rho_check_floyd init e =
   let e = normalize e in
   let init = normalize init in
-  let rec find_loop i e1 e2 =
-    if i >/ !check_max then begin
-      begin if !check_max >/ ?/1 then
-          printf "%s terms are all different.@." !/ !check_max end;
-      exit 0
-    end else
-      let next1 = normalize_app e1 e in
-      let next2 = normalize_app (normalize_app e2 e) e in
-      if next1 = next2 then (i, next1)
-      else begin
-        print_state i next1;
-        find_loop (succ_num i) next1 next2
-      end in
-  let i, exp = find_loop ?/1 init init in
-  let i2 = ?/2 */ i in
-  printf "Loop detected! (%s = %s [%s])@." !/i2 !/i !/i;
-  if !display = Verbose then display := Every ?/1;
-  let rec find_loop_entry i e1 e2 =
-    let next1 = normalize_app e1 e in
-    let next2 = normalize_app e2 e in
-    if next1 = next2 then i, next1
-    else begin
-      print_state i next1;
-      find_loop_entry (succ_num i) next1 next2
-    end in
-  let entry, exp = find_loop_entry ?/1 init exp in
-  if !display <> Quiet then eprintf "%3s => %s@." !/entry (string_of_expr exp);
-  printf "Loop entry found at %s!@." !/entry;
-  let rec find_cycle cyc last =
-    let next = normalize_app last e in
-    if next = exp then cyc
-    else begin
-      print_state (entry+/cyc) next;
-      find_cycle (succ_num cyc) next
-    end in
-  let cyc = find_cycle ?/1 exp in
-  printf "Found! (%s = %s [%s])@." !/(entry+/cyc) !/entry !/cyc
-
-(* Using Floyd's cycle finding algorithm with optimization *)
-let rho_check_floyd_ext init e =
-  let e = normalize e in
-  let init = normalize init in
-  let rec find_loop i e1 e2 =
-    if i >/ !check_max then begin
-      begin if !check_max >/ ?/1 then
-          printf "%s terms are all different.@." !/ !check_max end;
-      exit 0
-    end else
-      let next1 = normalize_app e1 e in
-      let next2 = normalize_app (normalize_app e2 e) e in
-      if next1 = next2 then (i, next1)
-      else begin
-        print_state i next1;
-        find_loop (succ_num i) next1 next2
-      end in
-  let point, exp = find_loop ?/1 init init in
-  let point2 = ?/2 */ point in
-  printf "Loop detected! (%s = %s [%s])@." !/point2 !/point !/point;
-  if !display = Verbose then display := Every ?/1;
-  let rec find_loop_entry i cnt e1 e2 =
-    let next1 = normalize_app e1 e in
-    let next2 = normalize_app e2 e in
-    if next1 = next2 then i, cnt
-    else
-      let cnt = if next2 = exp then succ_num cnt else cnt in
-      print_state i next1;
-      find_loop_entry (succ_num i) cnt next1 next2 in
-  let entry, cnt = find_loop_entry ?/1 ?/1 init exp in
-  let cyc = point // cnt in
-  if !display <> Quiet then eprintf "%3s => %s@." !/entry (string_of_expr exp);
-  printf "Found! (%s = %s [%s])@." !/(entry+/cyc) !/entry !/cyc
+  let module R = (Floyd (struct
+                           type t = expr
+                           let limit = !limit
+                           let next x = normalize_app x e
+                           let equal = (=)
+                           let display = print_state
+                         end)) in
+  R.find_cycle init
 
 let church n =
   let rec loop e n = if n < 1 then e else loop (App(Index 2,e)) (pred n) in
@@ -416,9 +351,9 @@ let make_speclist ks_spcl = add_speclist ks_spcl []
 let speclist = make_speclist [
   ["-a";"-argnum"], Arg.Set show_argnum,
   "Show the number of arguments (m = #args of fst arg, n = #args except fst args)";
-  ["-n"], Arg.String(fun i-> check_max := num_of_string i),
-  "Limit number of self applications (default = "^string_of_num !check_max^")";
-  ["-m";"-no-limit"], Arg.Unit(fun() -> check_max := ?/ max_int */ ?/ max_int),
+  ["-n"], Arg.String(fun i-> limit := int_of_string i),
+  "Limit number of self applications (default = "^string_of_int !limit^")";
+  ["-u";"-unbound"], Arg.Unit(fun() -> limit := max_int-1),
   "Keep on trying self applications unless the rho-property is found";
   ["-l";"-list"], Arg.Unit(fun() ->
                    CombMap.iter
@@ -427,20 +362,19 @@ let speclist = make_speclist [
   "List available combinators";
   ["-i";"-init"], Arg.String(fun str -> init_exp := parse str),
   "Initial expression";
+
   ["-q";"-quiet"], Arg.Unit(fun() -> display := Quiet),
   "Quiet mode";
-  ["-e";"-every"], Arg.String(fun i -> display := Every(num_of_string i)),
+  ["-e";"-every"], Arg.String(fun i -> display := Every(int_of_string i)),
   "Display only status every n";
   ["-ne";"-no-eta"], Arg.Set no_eta,
+
   "Skip eta reduction step for normalization";
   ["-p";"-print-bin"], Arg.Set show_bintree,
   "Print binary tree (lambda is ignored)";
-  ["-fc";"-floyd-cycle"], Arg.Unit(fun () -> loop_detection := Floyd),
+  ["-f";"-floyd-cycle"], Arg.Unit(fun () -> loop_detection := Floyd),
   "Use Floyd's cycle-finding algorithm";
-  ["-fx";"-floyd-ext"], Arg.Unit(fun () -> loop_detection := FloydExt),
-  "Use Floyd's cycle-finding algorithm with optimization";
-(*   ["-cs";"-constant-space"], Arg.Set space_efficient, *)
-(*   "Constant-space loop detection (which doesn't care the minimum pair)"; *)
+
   ["-b";"-bind-free-variables"], Arg.Set bind_vars,
   "Bind all free variables";
 ]
@@ -453,7 +387,8 @@ let _ =
   Arg.parse speclist anon_fun usage_msg;
   if String.length !expr_str = 0 then usage () else
     let e = parse !expr_str in
-    match !loop_detection with
-      | Naive -> rho_check !init_exp e
-      | Floyd -> rho_check_floyd !init_exp e
-      | FloydExt -> rho_check_floyd_ext !init_exp e
+    let init = normalize_app !init_exp e in
+    let entry, cyc = match !loop_detection with
+    | Naive -> rho_check init e
+    | Floyd -> rho_check_floyd init e in
+    printf "Found! (%d = %d [%d])@." (entry+cyc) entry cyc

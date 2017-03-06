@@ -35,8 +35,8 @@ where `\x[...]` represents &lambda;-abstraction.
 This syntax of &lambda;-abstraction can be used for combinators given by users.
 Use the `-q` option for the quiet mode.
 Although the program only checks first 65535 terms by default,
-add the `-m` option for keeping on trying to find the cycle.
-Using the `-fx` option,
+add the `-u` option for keeping on trying to find the cycle.
+Using the `-f` option,
 the Floyd's (also called tortoise-and-hare) semi-algorithm is used
 for finding cycles with constant memory usage.
 Run
@@ -45,11 +45,9 @@ $ rho -h
 ```
 for details of command line options.
 
-## Program `bfast`
+## Program `blist`
 
-The program `bfast` checks the &rho;-property of B-terms
-which has the form B<sup>n</sup> B
-where f<sup>n</sup> means the n-fold composition of f.
+The program `bfast` checks the &rho;-property of a B-term.
 The implementation is based on the normal form of B-terms
 in the list representation,
 B<sup>m<sub>1</sub></sup> B o
@@ -60,16 +58,26 @@ This command also uses Floyd's cycle-finding algorithm.
 To check the &rho;-property of B<sup>2</sup> B,
 run
 ```
-$ bfast 2
+$ blist 2
 ```
 which results in (B<sup>2</sup> B)<sub>294</sub> = (B<sup>2</sup> B)<sub>258</sub>
 with the history of computation over the list representation.
+To check the &rho;-property of
+B<sup>1</sup> B o B<sup>1</sup> B o B<sup>1</sup> B o
+B<sup>0</sup> B o B<sup>0</sup> B o B<sup>0</sup> B,
+run
+```
+$ blist 1 1 1 0 0 0
+```
+which does not terminate up to the given limit of repetition (65535 by default)
+because it does not have the &rho;-property.
 Command line options similar to those of `rho` are available.
-It is better to use the `-fx` option for larger n.
+It is better to add the `-f` option for larger n so as to use the Floyd's algorithm.
 Run
 ```
 $ bfast -h
 ```
 for details of command line options.
+
 
 
