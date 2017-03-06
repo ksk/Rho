@@ -6,7 +6,7 @@ X<sub>m</sub> and X<sub>n</sub> are &beta;&eta;-equivalent for distinct m and n,
 where X<sub>n</sub> is defined by X<sub>1</sub> = X
 and X<sub>n</sub> = X<sub>n-1</sub> X for n > 1.
 
-Two programs `rho` and `bfast` are available here.
+Two programs `rho` and `blist` are available here.
 
 ## Requirement and how to build
 
@@ -47,7 +47,7 @@ for details of command line options.
 
 ## Program `blist`
 
-The program `bfast` checks the &rho;-property of a B-term.
+The program `blist` checks the &rho;-property of a B-term.
 The implementation is based on the normal form of B-terms
 in the list representation,
 B<sup>m<sub>1</sub></sup> B o
@@ -75,9 +75,15 @@ Command line options similar to those of `rho` are available.
 It is better to add the `-f` option for larger n so as to use the Floyd's algorithm.
 Run
 ```
-$ bfast -h
+$ blist -h
 ```
 for details of command line options.
 
 
+## Conjecture
 
+Keisuke Nakano conjectured in 2003 that
+
+> a B-term has the &rho;-property if and only if it is equivalent to B<sup>n</sup> B with some n.
+
+and the both directions are still open.
