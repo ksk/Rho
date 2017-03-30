@@ -82,7 +82,7 @@ for details of command line options.
 
 ## Conjecture
 
-Keisuke Nakano conjectured in 2003 that
+Keisuke Nakano conjectured in 2008 that
 
 > a B-term has the &rho;-property if and only if it is equivalent to B<sup>n</sup> B with some n.
 
