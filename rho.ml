@@ -7,7 +7,7 @@ type expr = Index of int | Lambda of int * expr | App of expr * expr
 (* Lambda(N,exp) ... N nested lambda abstraction *)
 (* \lambda(\lambda(...(\lambda exp)...)) *)
 
-type algorithm = Naive | Floyd
+type algorithm = Naive | Floyd | Brent
 
 (* Num operators *)
 (* let (?/) = num_of_int *)
@@ -234,7 +234,7 @@ let print_state i e = match !display with
     printf "%3d%s => %s@." i (argnum_str e) (string_of_expr e);
     if !show_bintree then print_bin e
   | Every cycle ->
-      if i/cycle = 0 then eprintf "\r%d... %!" i
+      if i mod cycle = 0 then eprintf "\r%d... %!" i
 
 let rho_check init e =
   let module N = (Naive (struct
@@ -251,6 +251,18 @@ let rho_check_floyd init e =
   let e = normalize e in
   let init = normalize init in
   let module R = (Floyd (struct
+                           type t = expr
+                           let limit = !limit
+                           let next x = normalize_app x e
+                           let equal = (=)
+                           let display = print_state
+                         end)) in
+  R.find_cycle init
+
+let rho_check_brent init e =
+  let e = normalize e in
+  let init = normalize init in
+  let module R = (Brent (struct
                            type t = expr
                            let limit = !limit
                            let next x = normalize_app x e
@@ -374,8 +386,10 @@ let speclist = make_speclist [
   "Print binary tree (lambda is ignored)";
   ["-f";"-floyd-cycle"], Arg.Unit(fun () -> loop_detection := Floyd),
   "Use Floyd's cycle-finding algorithm";
+  ["-b";"-floyd-cycle"], Arg.Unit(fun () -> loop_detection := Brent),
+  "Use Brent's cycle-finding algorithm";
 
-  ["-b";"-bind-free-variables"], Arg.Set bind_vars,
+  ["-B";"-bind-free-variables"], Arg.Set bind_vars,
   "Bind all free variables";
 ]
 (* let usage () = Arg.usage (Arg.align speclist) usage_msg *)
@@ -388,7 +402,18 @@ let _ =
   if String.length !expr_str = 0 then usage () else
     let e = parse !expr_str in
     let init = normalize_app !init_exp e in
+    let show_mode mode_str =
+      printf "Cycle detection mode: %s@." mode_str in
+    let stime = Unix.gettimeofday() in
     let entry, cyc = match !loop_detection with
-    | Naive -> rho_check init e
-    | Floyd -> rho_check_floyd init e in
-    printf "Found! (%d = %d [%d])@." (entry+cyc) entry cyc
+    | Naive ->
+       show_mode "Naive";
+       rho_check init e
+    | Floyd ->
+       show_mode "Floyd";
+       rho_check_floyd init e
+    | Brent ->
+       show_mode "Brent";
+       rho_check_brent init e in
+    printf "Found! (%d = %d [%d])@." (entry+cyc) entry cyc;
+    printf "Elapsed time: %.3f sec.@." (Unix.gettimeofday()-.stime)

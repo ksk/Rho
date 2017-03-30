@@ -1,29 +1,30 @@
 OCAMLC = ocamlc
 OCAMLCP = ocamlcp
 OCAMLOPT = ocamlopt
+OCAMLDEP = ocamldep
+
+OCAMLFLAGS =
+OCAMLLIBS = nums.cma unix.cma
+OCAMLOPTLIBS = nums.cmxa unix.cmxa
 
 SRCS = store.ml cycle.ml
 
-all: bin opt
-bin: rho bfast blist
-opt: rho.opt bfast.opt blist.opt
+all: rho bpoly
+opt: rho.opt bpoly.opt
 
 install: opt
 	install rho.opt ${HOME}/bin/rho
-	install bfast.opt ${HOME}/bin/bfast
-	install blist.opt ${HOME}/bin/blist
+	install bpoly.opt ${HOME}/bin/bpoly
 
 rho: rho.bin rho.opt; @true
-rho.bin: store.cmo cycle.cmo rho.ml; ${OCAMLC} -pp camlp4o -o $@ $^
-rho.opt: store.cmx cycle.cmx rho.ml; ${OCAMLOPT} -pp camlp4o -o $@ $^
+rho.bin: store.cmo cycle.cmo rho.ml
+	${OCAMLC} -pp camlp4o $(OCAMLLIBS) -o $@ $^
+rho.opt: store.cmx cycle.cmx rho.ml
+	${OCAMLOPT} -pp camlp4o $(OCAMLOPTLIBS) -o $@ $^
 
-bfast: bfast.bin bfast.opt; @true
-bfast.bin: bfast.ml; ${OCAMLC} unix.cma -o $@ $?
-bfast.opt: bfast.ml; ${OCAMLOPT} unix.cmxa -o $@ $?
-
-blist: blist.bin blist.opt; @true
-blist.bin: store.cmo cycle.cmo blist.ml; ${OCAMLC} unix.cma -o $@ $^
-blist.opt: store.cmx cycle.cmx blist.ml; ${OCAMLOPT} unix.cmxa -o $@ $^
+bpoly: bpoly.bin bpoly.opt; @true
+bpoly.bin: store.cmo cycle.cmo bpoly.ml; ${OCAMLC} unix.cma -o $@ $^
+bpoly.opt: store.cmx cycle.cmx bpoly.ml; ${OCAMLOPT} unix.cmxa -o $@ $^
 
 depend: $(SRCS)
 	$(OCAMLDEP) $^ > depend
@@ -38,4 +39,4 @@ depend: $(SRCS)
 .mly.mli: ; $(OCAMLYACC) $<
 .mll.ml: ; $(OCAMLLEX) $<
 
-clean:;	rm -rf *~ *.cm* *.tmp *.bin *.opt *.out *.o
+clean:;	rm -rf *~ *.cm* *.tmp *.bin *.opt *.out *.o depend

@@ -6,11 +6,11 @@ X<sub>m</sub> and X<sub>n</sub> are &beta;&eta;-equivalent for distinct m and n,
 where X<sub>n</sub> is defined by X<sub>1</sub> = X
 and X<sub>n</sub> = X<sub>n-1</sub> X for n > 1.
 
-Two programs `rho` and `blist` are available here.
+Two programs `rho` and `bpoly` are available here.
 
 ## Requirement and how to build
 
-OCaml (&ge; 4.00) is required for building the programs.
+OCaml (&ge; 4.03) and CamlP4 are required for building the programs.
 Both can be built just by `make`.
 
 ## Program `rho`
@@ -37,7 +37,7 @@ Use the `-q` option for the quiet mode.
 Although the program only checks first 65535 terms by default,
 add the `-u` option for keeping on trying to find the cycle.
 Using the `-f` option,
-the Floyd's (also called tortoise-and-hare) semi-algorithm is used
+Floyd's (also called tortoise-and-hare) semi-algorithm is used
 for finding cycles with constant memory usage.
 Run
 ```
@@ -45,11 +45,11 @@ $ rho -h
 ```
 for details of command line options.
 
-## Program `blist`
+## Program `bpoly`
 
-The program `blist` checks the &rho;-property of a B-term.
+The program `bpoly` checks the &rho;-property of a B-term.
 The implementation is based on the normal form of B-terms
-in the list representation,
+in the 'decreasing polynomial' representation
 B<sup>m<sub>1</sub></sup> B o
 B<sup>m<sub>2</sub></sup> B o ... o
 B<sup>m<sub>k</sub></sup> B,
@@ -58,24 +58,24 @@ This command also uses Floyd's cycle-finding algorithm.
 To check the &rho;-property of B<sup>2</sup> B,
 run
 ```
-$ blist 2
+$ bpoly 2
 ```
 which results in (B<sup>2</sup> B)<sub>294</sub> = (B<sup>2</sup> B)<sub>258</sub>
-with the history of computation over the list representation.
+with the history of computation over decreasing polynomials.
 To check the &rho;-property of
 B<sup>1</sup> B o B<sup>1</sup> B o B<sup>1</sup> B o
 B<sup>0</sup> B o B<sup>0</sup> B o B<sup>0</sup> B,
 run
 ```
-$ blist 1 1 1 0 0 0
+$ bpoly 1 1 1 0 0 0
 ```
 which does not terminate up to the given limit of repetition (65535 by default)
 because it does not have the &rho;-property.
 Command line options similar to those of `rho` are available.
-It is better to add the `-f` option for larger n so as to use the Floyd's algorithm.
+It is better to add the `-f` option for larger n so as to use Floyd's algorithm.
 Run
 ```
-$ blist -h
+$ bpoly -h
 ```
 for details of command line options.
 
