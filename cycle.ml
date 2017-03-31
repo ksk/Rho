@@ -60,14 +60,16 @@ module Floyd (E:ExprType) = struct
   (* Find the entry of loop by starting with i such that e=A(i)=A(2i) *)
   (* and searching the smallest k with x = A(k) = A(i+k)              *)
   (* to return k and x                                                *)
-  let rec find_loop_entry last1 last2 i e cnt =
+  let rec find_loop_entry last1 last2 i e cyc_op =
     let next1 = E.next last1 in
     let next2 = E.next last2 in
-    if E.equal next1 next2 then (i, cnt, next1)
+    if E.equal next1 next2 then (i, cyc_op, next1)
     else
-      let cnt = if E.equal e next2 then succ cnt else cnt in
+      let cyc_op = match cyc_op with
+        | None when E.equal e next2 -> Some i
+        | _ -> cyc_op in
       E.display i next1;
-      find_loop_entry next1 next2 (succ i) e cnt
+      find_loop_entry next1 next2 (succ i) e cyc_op
 
   let find_cycle init =
     E.display 1 init;
@@ -75,11 +77,10 @@ module Floyd (E:ExprType) = struct
     let i, e = find_loop init (E.next init) 2 in
     printf "Loop detected! (%d = %d [%d])@." (2*i) i i;
     (* Find (the smallest) k, c and x s.t. x = A(k) = A(i+k) 
-       where c is 1 + the number of j satisfying e = A(j) and k < j < i+k *)
-    let k, c, x = find_loop_entry init (E.next e) (succ i) e 1 in
+       where c is A(c) = A(i) and i < c < 2i *)
+    let k, co, x = find_loop_entry init (E.next e) (succ i) e None in
+    let loop_size = match co with None -> i | Some c -> c-i+1 in
     printf "Loop entry found at %d!@." (k-i+1);
-    assert (i mod c = 0);
-    let loop_size = i / c in
     k-i+1, loop_size
 end
 
@@ -91,7 +92,8 @@ module RestartableFloyd (E:ExprType) = struct
   type funcall =
     | Init
     | FindLoop of { last1: t; last2: t; i: int }
-    | FindLoopEntry of { last1: t; last2: t; i: int; e: t; cnt: int }
+    (* | FindLoopEntry of { last1: t; last2: t; i: int; e: t; cnt: int } *)
+    | FindLoopEntry of { last1: t; last2: t; i: int; e: t; cyc_op: int option }
   type state = { mutable init: t option;
                  mutable i_e: (int * t) option; (* (i, A(i)) s.t. A(i)=A(2i) *)
                  mutable funcall: funcall }
@@ -113,33 +115,21 @@ module RestartableFloyd (E:ExprType) = struct
   (* Find the entry of loop by starting with i such that e=A(i)=A(2i) *)
   (* and searching the smallest k with x = A(k) = A(i+k)              *)
   (* to return k and x                                                *)
-  let rec find_loop_entry last1 last2 i e cnt =
-    state.funcall <- FindLoopEntry{ last1; last2; i; e; cnt };
+  let rec find_loop_entry last1 last2 i e cyc_op =
+    state.funcall <- FindLoopEntry{ last1; last2; i; e; cyc_op };
     let next1 = E.next last1 in
     let next2 = E.next last2 in
-    if E.equal next1 next2 then (i, cnt, next1)
+    if E.equal next1 next2 then (i, cyc_op, next1)
     else
-      let cnt = if E.equal e next2 then succ cnt else cnt in
+      let cyc_op = match cyc_op with
+        | None when E.equal e next2 -> Some i
+        | _ -> cyc_op in
       E.display i next1;
-      find_loop_entry next1 next2 (succ i) e cnt
-
-  let find_cycle init =
-    E.display 1 init;
-    (* Find (the smallest) i and e s.t. e = A(i) = A(2i) *)
-    let i, e = find_loop init (E.next init) 2 in
-    printf "Loop detected! (%d = %d [%d])@." (2*i) i i;
-    (* Find (the smallest) k, c and x s.t. x = A(k) = A(i+k) 
-       where c is 1 + the number of j satisfying e = A(j) and k < j < i+k *)
-    let k, c, x = find_loop_entry init (E.next e) (succ i) e 1 in
-    printf "Loop entry found at %d!@." (k-i+1);
-    assert (i mod c = 0);
-    let loop_size = i / c in
-    k-i+1, loop_size
-
-  
+      find_loop_entry next1 next2 (succ i) e cyc_op
 
   let find_cycle_with_state init =
     E.display 1 init;
+    (* Find (the smallest) i and e s.t. e = A(i) = A(2i) *)
     let i, e = match state.funcall with
       | Init -> find_loop init (E.next init) 2 
       | FindLoop { last1; last2; i } -> find_loop last1 last2 i
@@ -148,14 +138,15 @@ module RestartableFloyd (E:ExprType) = struct
                            | Some i_e -> i_e in
     state.i_e <- Some(i,e);
     printf "Loop detected! (%d = %d [%d])@." (2*i) i i;
-    let k, c, x = match state.funcall with
+    (* Find (the smallest) k, c and x s.t. x = A(k) = A(i+k) 
+       where c is A(c) = A(i) and i < c < 2i *)
+    let k, co, x = match state.funcall with
       | Init | FindLoop _ ->
-         find_loop_entry init (E.next e) (succ i) e 1
-      | FindLoopEntry { last1; last2; i; e; cnt } ->
-         find_loop_entry last1 last2 i e cnt in
+         find_loop_entry init (E.next e) (succ i) e None
+      | FindLoopEntry { last1; last2; i; e; cyc_op } ->
+         find_loop_entry last1 last2 i e cyc_op in
+    let loop_size = match co with None -> i | Some c -> c-i+1 in
     printf "Loop entry found at %d!@." (k-i+1);
-    assert (i mod c = 0);
-    let loop_size = i / c in
     k-i+1, loop_size
 
   let find_cycle_restart expr fname =
