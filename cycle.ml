@@ -21,6 +21,8 @@ end
 (*   val singleton	: t -> int -> store *)
 (* end *)
 
+type restart = RBrent | RFloyd
+
 module Naive (E:ExprType) (S:StoreType with type t = E.t) = struct
   type t = E.t
   let find_cycle init =
@@ -151,15 +153,17 @@ module RestartableFloyd (E:ExprType) = struct
 
   let find_cycle_restart expr fname =
     let auto, fname =
-      if fname = "" then true, sprintf ".blist%d" (Hashtbl.hash expr)
+      if fname = "" then true, sprintf ".bpoly%d" (Hashtbl.hash expr)
       else false, fname in
     let stime = Unix.gettimeofday() in
     Sys.(set_signal sigint
            (Signal_handle(fun _signum -> raise (Interrupted state))));
     (* Load a state from a given file *)
-    let elapsed, {init; i_e; funcall} =
+    let restart, elapsed, {init; i_e; funcall} =
       try input_value (open_in fname)
-      with _ -> 0., { init = Some expr; i_e = None; funcall = Init } in
+      with _ -> RFloyd, 0., { init = Some expr; i_e = None; funcall = Init } in
+    if restart <> RFloyd then
+      begin eprintf"Inconsistent cycle detection mode.@."; exit 1 end;
     state.init <- init; state.i_e <- i_e; state.funcall <- funcall;
     if state.init <> Some expr then
       begin eprintf"inconsistent initial expression."; exit 1 end;
@@ -172,7 +176,7 @@ module RestartableFloyd (E:ExprType) = struct
       res
     with Interrupted state ->
          let elapsed = elapsed+.Unix.gettimeofday()-.stime in
-         output_value (open_out fname) (elapsed, state);
+         output_value (open_out fname) (RFloyd, elapsed, state);
          let funcall = match state.funcall with
            | Init -> "init"
            | FindLoop { i } -> sprintf "find_loop _ _ %d" i
@@ -233,7 +237,7 @@ module Brent (E:ExprType) = struct
     else
       let next1 = E.next last1 in
       let next2 = E.next last2 in
-      E.display i next1;
+      E.display (succ i) next1;
       find_loop_entry next1 next2 (succ i)
 
   let find_cycle init =
@@ -252,3 +256,128 @@ module Brent (E:ExprType) = struct
     k, loop_size
 end
 
+(* Restartable Brent's algorithm *)
+module RestartableBrent (E:ExprType) = struct
+  type t = E.t
+
+  type funcall =
+    | Init
+    | FindLoop of { last1: t; last2: t; i: int; pow: int }
+    | FindKth of { x1: t; k: int }
+    | FindLoopEntry of { last1: t; last2: t; i: int }
+
+  type state = { mutable init: t option;
+                 mutable find_loop: (int * int) option;
+                 mutable find_kth: t option;
+                 mutable funcall: funcall }
+
+  exception Interrupted of state
+
+  let state = { init = None;
+                find_loop = None;
+                find_kth = None;
+                funcall = Init }
+
+  (* Find loop by Brent's cycle-finding algorithm                    *)
+  (* to return k and pow such that A(pow=2**n) = A(pow+k) (1<=k<pow) *)
+  let rec find_loop last1 last2 i pow =
+    state.funcall <- FindLoop { last1; last2; i; pow };
+    if pow > E.limit then begin
+      if E.limit > 1 then
+        eprintf "%d terms are all different.@." (pow+i);
+      exit 0
+    end else
+      if E.equal last1 last2 then (i,pow)
+      else 
+        let next2 = E.next last2 in
+        E.display (pow+i+1) next2;
+        if i = pow then
+          find_loop last2 next2 1 (pow lsl 1)
+        else
+          find_loop last1 next2 (succ i) pow
+                    
+  let rec find_kth x1 k =
+    state.funcall <- FindKth { x1; k };
+    if k <= 1 then x1 else find_kth (E.next x1) (k-1)
+
+  (* Find the entry of loop by starting with i such that e=A(i)=A(2i) *)
+  (* and searching the smallest k with x = A(k) = A(i+k)              *)
+  (* to return k and x                                                *)
+  let rec find_loop_entry last1 last2 i =
+    state.funcall <- FindLoopEntry { last1; last2; i };
+    if E.equal last1 last2 then (i, last1)
+    else
+      let next1 = E.next last1 in
+      let next2 = E.next last2 in
+      E.display i next1;
+      find_loop_entry next1 next2 (succ i)
+
+  let find_cycle_with_funcall init =
+    E.display 1 init;
+    begin match state.init with
+          | Some e -> 
+              if e <> init then
+                begin eprintf"inconsistent initial expression."; exit 1 end
+          | None -> state.init <- Some init end;
+    let next = E.next init in
+    E.display 2 next;
+    (* Find (the smallest) c and e s.t. e = A(i) = A(i+c) with i=2**j-1 
+       with smallest j *)
+    let loop_size, pow = match state.funcall with
+      | Init -> find_loop init next 1 1
+      | FindLoop{last1;last2;i;pow} -> find_loop last1 last2 i pow
+      | _ -> match state.find_loop with
+             | None -> invalid_arg "wrong state (find_loop)"
+             | Some ls_p -> ls_p in
+    state.find_loop <- Some(loop_size, pow);
+    printf "Loop detected! (%d = %d [%d])@." (pow+loop_size) pow loop_size;
+    (* Compute A(c) *)
+    let e = match state.funcall with
+      | Init | FindLoop _ -> find_kth init loop_size
+      | FindKth{x1;k} -> find_kth x1 k
+      | _ -> match state.find_kth with
+             | None -> invalid_arg "wrong state (find_kth)"
+             | Some e -> e in
+    state.find_kth <- Some e;
+    (* Find (the smallest) k and x s.t. x = A(k) = A(k+c) *)
+    let k, x = match state.funcall with
+      | Init | FindLoop _ | FindKth _ -> find_loop_entry init (E.next e) 1
+      | FindLoopEntry{last1;last2;i} -> find_loop_entry last1 last2 i in
+    printf "Loop entry found at %d!@." k;
+    k, loop_size
+
+  let find_cycle_restart init fname =
+    (* generate a filename if specifying no fileneme *)
+    let auto, fname =
+      if fname = "" then true, sprintf ".bpoly%d" (Hashtbl.hash init)
+      else false, fname in
+    let stime = Unix.gettimeofday() in
+    Sys.(set_signal sigint
+           (Signal_handle(fun _signum -> raise (Interrupted state))));
+    (* Load a state from a given file *)
+    let restart, elapsed, s =
+      try input_value (open_in fname) with _ -> RBrent, 0., state in
+    state.init <- s.init; state.find_loop <- s.find_loop;
+    state.find_kth <- s.find_kth; state.funcall <- s.funcall;
+    if restart <> RBrent then
+      begin eprintf"Inconsistent cycle detection mode.@."; exit 1 end;
+    try 
+      let res = find_cycle_with_funcall init in
+      let elapsed = elapsed+.Unix.gettimeofday()-.stime in
+      begin try Unix.unlink fname with _ -> () end;
+      eprintf "Elapsed time: %.3f sec@." elapsed;
+      res
+    with Interrupted state ->
+         let elapsed = elapsed+.Unix.gettimeofday()-.stime in
+         output_value (open_out fname) (RBrent, elapsed, state);
+         let funcall = match state.funcall with
+           | Init -> "init"
+           | FindLoop { i; pow } -> sprintf "find_loop _ _ %d %d" i pow
+           | FindKth { k } -> sprintf "find_kth _ %d" k
+           | FindLoopEntry { i } -> sprintf "find_loop_entry _ _ %d" i in
+         let opt_r = if auto then "-R" else sprintf "-r %s" fname in
+         eprintf ("Interrupted at '%s' (%.2f sec).@."
+                  ^^"You can run again with '%s'.@.")
+                 funcall elapsed opt_r;
+         exit 0
+end

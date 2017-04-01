@@ -6,9 +6,11 @@ let limit = ref 65535
 type howshow =
   | Sum | Length | Height | Depth | BarChart
   (* | NumKind | BaseTwo | BaseTwoS | ShrinkL | ShrinkM | ShrinkF *)
-type mode = Naive | Floyd | Brent | Restartable of string (* filename *)
+type mode = Naive | Floyd | Brent
 type store = Map | Hashtbl
 type display = Quiet | Verbose | Every of int | Show of howshow list
+
+let restart_file : string option ref = ref None
 let mode = ref Naive
 let store = ref Hashtbl
 let display = ref Verbose
@@ -203,8 +205,18 @@ let rho_check_brent expr =
                          end)) in
   R.find_cycle expr
 
-let rho_check_restart expr fname =
+let rho_check_restart_floyd expr fname =
   let module R = (RestartableFloyd (struct
+                                     type t = expr
+                                     let limit = !limit
+                                     let next e = apply e expr
+                                     let equal = (=)
+                                     let display = show_status !display
+                                   end)) in
+  R.find_cycle_restart expr fname
+
+let rho_check_restart_brent expr fname =
+  let module R = (RestartableBrent (struct
                                      type t = expr
                                      let limit = !limit
                                      let next e = apply e expr
@@ -243,9 +255,13 @@ let speclist = make_speclist [
   "Use Floyd's cycle-finding algorithm";
   ["-b";"-brent"], Arg.Unit(fun () -> mode := Brent),
   "Use Brent's cycle-finding algorithm";
-  ["-r";"-restart"], Arg.String(fun s -> mode := Restartable s),
+  ["-r";"-restart"], Arg.String(fun s ->
+                                if !mode = Naive then mode := Floyd;
+                                restart_file := Some s),
   "Use Floyd's cycle-finding algorithm with restartable mode";
-  ["-R";"-restart-auto"], Arg.Unit(fun () -> mode := Restartable ""),
+  ["-R";"-restart-auto"], Arg.Unit(fun () ->
+                                   if !mode = Naive then mode := Floyd;
+                                   restart_file := Some ""),
   "Similar to '-r' but with specifying no filename";
  
   ["-w";"-width"], Arg.Set_int wid,
@@ -294,15 +310,21 @@ let () =
        show_mode "Naive";
        rho_check stmod expr
     | Floyd ->
-       show_mode "Floyd";
-       rho_check_floyd expr
+       begin match !restart_file with
+             | None ->
+                show_mode "Floyd";
+                rho_check_floyd expr
+             | Some fname ->
+                show_mode "Restartable (Floyd)";
+                rho_check_restart_floyd expr fname end
     | Brent ->
-       show_mode "Brent";
-       rho_check_brent expr
-    | Restartable fname ->
-       show_mode "Restartable (Floyd)";
-       rho_check_restart expr fname in
+       begin match !restart_file with
+             | None ->
+                show_mode "Brent";
+                rho_check_brent expr
+             | Some fname ->
+                show_mode "Restartable (Brent)";
+                rho_check_restart_brent expr fname end in
   printf "Found! (%d = %d [%d])@." (start+cycle) start cycle;
-  match !mode with
-    Restartable _ -> ()
-  | _ -> printf "Elapsed time: %.3f sec.@." (Unix.gettimeofday()-.stime)
+  if !restart_file = None then
+   printf "Elapsed time: %.3f sec.@." (Unix.gettimeofday()-.stime)
