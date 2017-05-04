@@ -3,3 +3,5 @@
 *.opt
 depend
 *.o
+.bbrent*
+.bfloyd*
