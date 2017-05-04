@@ -258,7 +258,7 @@ let speclist = make_speclist [
   ["-r";"-restart"], Arg.String(fun s ->
                                 if !mode = Naive then mode := Floyd;
                                 restart_file := Some s),
-  "Use Floyd's cycle-finding algorithm with restartable mode";
+  "Running with restartable mode (default: Floyd's cycle-finding algorithm)";
   ["-R";"-restart-auto"], Arg.Unit(fun () ->
                                    if !mode = Naive then mode := Floyd;
                                    restart_file := Some ""),

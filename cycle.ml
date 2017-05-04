@@ -98,9 +98,21 @@ module RestartableFloyd (E:ExprType) = struct
     | FindLoopEntry of { last1: t; last2: t; i: int; e: t; cyc_op: int option }
   type state = { mutable init: t option;
                  mutable i_e: (int * t) option; (* (i, A(i)) s.t. A(i)=A(2i) *)
-                 mutable funcall: funcall }
+                 mutable funcall: funcall;
+                 mutable elapsed: float;
+               }
 
-  let state = { init = None; i_e = None; funcall = Init }
+  let state = { init = None; i_e = None; funcall = Init; elapsed = 0. }
+  let stime = ref (Unix.gettimeofday()) (* start time *)
+  let rfile = ref ""      (* the file name for restarting *)
+
+  let save_current_state state =
+    let elapsed = state.elapsed +. Unix.gettimeofday()-. !stime in
+    state.elapsed <- elapsed;
+    let oc = open_out !rfile in
+    output_value oc (RFloyd, state);
+    close_out oc
+
   exception Interrupted of state
 
   (* Find loop by Floyd's tortoise-and-hare cycle-finding algorithm *)
@@ -111,6 +123,7 @@ module RestartableFloyd (E:ExprType) = struct
     let next2 = E.next (E.next last2) in
     E.display i next1;
     (* E.display (2*i) next2; *)
+    if i land 0xffffff = 0 then save_current_state state;
     if E.equal next1 next2 then (i, next1)
     else find_loop next1 next2 (succ i)
 
@@ -127,6 +140,7 @@ module RestartableFloyd (E:ExprType) = struct
         | None when E.equal e next2 -> Some i
         | _ -> cyc_op in
       E.display i next1;
+      if i land 0xffffff = 0 then save_current_state state;
       find_loop_entry next1 next2 (succ i) e cyc_op
 
   let find_cycle_with_state init =
@@ -153,38 +167,40 @@ module RestartableFloyd (E:ExprType) = struct
 
   let find_cycle_restart expr fname =
     let auto, fname =
-      if fname = "" then true, sprintf ".bpoly%d" (Hashtbl.hash expr)
+      if fname = "" then true, sprintf ".bfloyd%d" (Hashtbl.hash expr)
       else false, fname in
-    let stime = Unix.gettimeofday() in
+    rfile := fname;
+    stime := Unix.gettimeofday();
     Sys.(set_signal sigint
            (Signal_handle(fun _signum -> raise (Interrupted state))));
     (* Load a state from a given file *)
-    let restart, elapsed, {init; i_e; funcall} =
+    let restart, {init; i_e; funcall; elapsed} =
       try input_value (open_in fname)
-      with _ -> RFloyd, 0., { init = Some expr; i_e = None; funcall = Init } in
+      with _ -> RFloyd, { init = Some expr; i_e = None; funcall = Init;
+                          elapsed = 0. } in
     if restart <> RFloyd then
       begin eprintf"Inconsistent cycle detection mode.@."; exit 1 end;
     state.init <- init; state.i_e <- i_e; state.funcall <- funcall;
+    state.elapsed <- elapsed;
     if state.init <> Some expr then
       begin eprintf"inconsistent initial expression."; exit 1 end;
     let init = match state.init with None -> expr | Some e -> e in
     try
       let res = find_cycle_with_state init in
-      let elapsed = elapsed+.Unix.gettimeofday()-.stime in
+      let elapsed = state.elapsed +. Unix.gettimeofday()-. !stime in
       begin try Unix.unlink fname with _ -> () end;
       eprintf "Elapsed time: %.3f sec@." elapsed;
       res
     with Interrupted state ->
-         let elapsed = elapsed+.Unix.gettimeofday()-.stime in
-         output_value (open_out fname) (RFloyd, elapsed, state);
+      save_current_state state;
          let funcall = match state.funcall with
            | Init -> "init"
            | FindLoop { i } -> sprintf "find_loop _ _ %d" i
            | FindLoopEntry { i } -> sprintf "find_loop_entry _ _ %d _ _" i in
-         let opt_r = if auto then "-R" else sprintf "-r %s" fname in
+         let opt_r = if auto then "-R" else sprintf "-r %s" !rfile in
          eprintf ("Interrupted at '%s' (%.2f sec).@."
                   ^^"You can run again with '%s'.@.")
-                 funcall elapsed opt_r;
+                 funcall state.elapsed opt_r;
          exit 0
 
 end
@@ -269,14 +285,25 @@ module RestartableBrent (E:ExprType) = struct
   type state = { mutable init: t option;
                  mutable find_loop: (int * int) option;
                  mutable find_kth: t option;
-                 mutable funcall: funcall }
+                 mutable funcall: funcall;
+                 mutable elapsed: float; }
 
   exception Interrupted of state
 
   let state = { init = None;
                 find_loop = None;
                 find_kth = None;
-                funcall = Init }
+                funcall = Init;
+                elapsed = 0.  }
+  let stime = ref (Unix.gettimeofday()) (* start time *)
+  let rfile = ref ""      (* the file name for restarting *)
+
+  let save_current_state state =
+    let elapsed = state.elapsed +. Unix.gettimeofday() -. !stime in
+    state.elapsed <- elapsed;
+    let oc = open_out !rfile in
+    output_value oc (RBrent, state);
+    close_out oc
 
   (* Find loop by Brent's cycle-finding algorithm                    *)
   (* to return k and pow such that A(pow=2**n) = A(pow+k) (1<=k<pow) *)
@@ -291,6 +318,7 @@ module RestartableBrent (E:ExprType) = struct
       else 
         let next2 = E.next last2 in
         E.display (pow+i+1) next2;
+        if i land 0xffffff = 0 then save_current_state state;
         if i = pow then
           find_loop last2 next2 1 (pow lsl 1)
         else
@@ -310,6 +338,7 @@ module RestartableBrent (E:ExprType) = struct
       let next1 = E.next last1 in
       let next2 = E.next last2 in
       E.display i next1;
+      if i land 0xffffff = 0 then save_current_state state;
       find_loop_entry next1 next2 (succ i)
 
   let find_cycle_with_funcall init =
@@ -349,35 +378,36 @@ module RestartableBrent (E:ExprType) = struct
   let find_cycle_restart init fname =
     (* generate a filename if specifying no fileneme *)
     let auto, fname =
-      if fname = "" then true, sprintf ".bpoly%d" (Hashtbl.hash init)
+      if fname = "" then true, sprintf ".bbrent%d" (Hashtbl.hash init)
       else false, fname in
-    let stime = Unix.gettimeofday() in
+    rfile := fname;
+    stime := Unix.gettimeofday();
     Sys.(set_signal sigint
            (Signal_handle(fun _signum -> raise (Interrupted state))));
     (* Load a state from a given file *)
-    let restart, elapsed, s =
-      try input_value (open_in fname) with _ -> RBrent, 0., state in
+    let restart, s =
+      try input_value (open_in !rfile) with _ -> RBrent, state in
     state.init <- s.init; state.find_loop <- s.find_loop;
     state.find_kth <- s.find_kth; state.funcall <- s.funcall;
+    state.elapsed <- s.elapsed;
     if restart <> RBrent then
       begin eprintf"Inconsistent cycle detection mode.@."; exit 1 end;
     try 
       let res = find_cycle_with_funcall init in
-      let elapsed = elapsed+.Unix.gettimeofday()-.stime in
-      begin try Unix.unlink fname with _ -> () end;
+      let elapsed = state.elapsed+.Unix.gettimeofday()-. !stime in
+      begin try Unix.unlink !rfile with _ -> () end;
       eprintf "Elapsed time: %.3f sec@." elapsed;
       res
     with Interrupted state ->
-         let elapsed = elapsed+.Unix.gettimeofday()-.stime in
-         output_value (open_out fname) (RBrent, elapsed, state);
-         let funcall = match state.funcall with
-           | Init -> "init"
-           | FindLoop { i; pow } -> sprintf "find_loop _ _ %d %d" i pow
-           | FindKth { k } -> sprintf "find_kth _ %d" k
-           | FindLoopEntry { i } -> sprintf "find_loop_entry _ _ %d" i in
-         let opt_r = if auto then "-R" else sprintf "-r %s" fname in
-         eprintf ("Interrupted at '%s' (%.2f sec).@."
-                  ^^"You can run again with '%s'.@.")
-                 funcall elapsed opt_r;
-         exit 0
+      save_current_state state;
+      let funcall = match state.funcall with
+        | Init -> "init"
+        | FindLoop { i; pow } -> sprintf "find_loop _ _ %d %d" i pow
+        | FindKth { k } -> sprintf "find_kth _ %d" k
+        | FindLoopEntry { i } -> sprintf "find_loop_entry _ _ %d" i in
+      let opt_r = if auto then "-R" else sprintf "-r %s" !rfile in
+      eprintf ("Interrupted at '%s' (%.2f sec).@."
+               ^^"You can run again with '%s'.@.")
+              funcall state.elapsed opt_r;
+      exit 0
 end
