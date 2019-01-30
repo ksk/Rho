@@ -7,7 +7,7 @@ type expr = Index of int | Lambda of int * expr | App of expr * expr
 (* Lambda(N,exp) ... N nested lambda abstraction *)
 (* \lambda(\lambda(...(\lambda exp)...)) *)
 
-type algorithm = Naive | Floyd | Brent
+type algorithm = Naive | Floyd | Brent | Gosper
 
 (* Num operators *)
 (* let (?/) = num_of_int *)
@@ -241,6 +241,8 @@ let rho_check init e =
                           type t = expr
                           let limit = !limit
                           let next x = normalize_app x e
+                          let next_impure x = next x
+                          let copy x = x
                           let equal = (=)
                           let display = print_state
                         end) (HashtblStore)) in
@@ -254,6 +256,8 @@ let rho_check_floyd init e =
                            type t = expr
                            let limit = !limit
                            let next x = normalize_app x e
+                           let next_impure x = next x
+                           let copy x = x
                            let equal = (=)
                            let display = print_state
                          end)) in
@@ -266,6 +270,22 @@ let rho_check_brent init e =
                            type t = expr
                            let limit = !limit
                            let next x = normalize_app x e
+                           let next_impure x = next x
+                           let copy x = x
+                           let equal = (=)
+                           let display = print_state
+                         end)) in
+  R.find_cycle init
+
+let rho_check_gosper init e =
+  let e = normalize e in
+  let init = normalize init in
+  let module R = (Gosper (struct
+                           type t = expr
+                           let limit = !limit
+                           let next x = normalize_app x e
+                           let next_impure x = next x
+                           let copy x = x
                            let equal = (=)
                            let display = print_state
                          end)) in
@@ -386,8 +406,10 @@ let speclist = make_speclist [
   "Print binary tree (lambda is ignored)";
   ["-f";"-floyd-cycle"], Arg.Unit(fun () -> loop_detection := Floyd),
   "Use Floyd's cycle-finding algorithm";
-  ["-b";"-floyd-cycle"], Arg.Unit(fun () -> loop_detection := Brent),
+  ["-b";"-brent-cycle"], Arg.Unit(fun () -> loop_detection := Brent),
   "Use Brent's cycle-finding algorithm";
+  ["-g";"-gosper-cycle"], Arg.Unit(fun () -> loop_detection := Gosper),
+  "Use Gosper's cycle-finding algorithm";
 
   ["-B";"-bind-free-variables"], Arg.Set bind_vars,
   "Bind all free variables";
@@ -405,7 +427,7 @@ let _ =
     let show_mode mode_str =
       printf "Cycle detection mode: %s@." mode_str in
     let stime = Unix.gettimeofday() in
-    let entry, cyc = match !loop_detection with
+    let entry, cyc, exp = match !loop_detection with
     | Naive ->
        show_mode "Naive";
        rho_check init e
@@ -414,6 +436,10 @@ let _ =
        rho_check_floyd init e
     | Brent ->
        show_mode "Brent";
-       rho_check_brent init e in
+       rho_check_brent init e
+    | Gosper ->
+       show_mode "Gosper";
+       rho_check_gosper init e in
+    printf "%3d%s => %s@." entry (argnum_str exp) (string_of_expr exp);
     printf "Found! (%d = %d [%d])@." (entry+cyc) entry cyc;
     printf "Elapsed time: %.3f sec.@." (Unix.gettimeofday()-.stime)

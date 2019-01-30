@@ -5,7 +5,9 @@ open Store
 module type ExprType = sig
   type t
   val limit : int
-  val next  : t -> t
+  val next : t -> t        (* Its input must be preserved. *)
+  val next_impure : t -> t (* Its input may be broken.     *)
+  val copy : t -> t        (* Deep copy *)
   val equal : t -> t -> bool
   val display : int -> t -> unit
 end
@@ -21,7 +23,7 @@ end
 (*   val singleton	: t -> int -> store *)
 (* end *)
 
-type restart = RBrent | RFloyd
+type restart = RBrent | RFloyd | RGosper
 
 module Naive (E:ExprType) (S:StoreType with type t = E.t) = struct
   type t = E.t
@@ -31,14 +33,14 @@ module Naive (E:ExprType) (S:StoreType with type t = E.t) = struct
         if E.limit > 1 then printf "%d terms are all different.@." E.limit;
         exit 0
       end else
-        let next = E.next last in
+        let next = E.next_impure last in
         try let prev = S.find next hist in
-            (prev, i-prev)
+            (prev, i-prev, next)
         with Not_found ->
           E.display i next;
-          loop next (i+1) (S.add next i hist) in
+          loop next (i+1) (S.add (E.copy next) i hist) in
     E.display 1 init;
-    loop init 2 (S.singleton init 1)
+    loop init 2 (S.singleton (E.copy init) 1)
 end
 
 module Floyd (E:ExprType) = struct
@@ -52,8 +54,8 @@ module Floyd (E:ExprType) = struct
         eprintf "%d terms are all different.@." (2 * E.limit);
       exit 0
     end else
-      let next1 = E.next last1 in
-      let next2 = E.next (E.next last2) in
+      let next1 = E.next_impure last1 in
+      let next2 = E.next_impure (E.next_impure last2) in
       E.display i next1;
       (* E.display (2*i) next2; *)
       if E.equal next1 next2 then (i, next1)
@@ -63,27 +65,29 @@ module Floyd (E:ExprType) = struct
   (* and searching the smallest k with x = A(k) = A(i+k)              *)
   (* to return k and x                                                *)
   let rec find_loop_entry last1 last2 i e cyc_op =
-    let next1 = E.next last1 in
-    let next2 = E.next last2 in
+    let next1 = E.next_impure last1 in
+    let next2 = E.next_impure last2 in
     if E.equal next1 next2 then (i, cyc_op, next1)
     else
       let cyc_op = match cyc_op with
         | None when E.equal e next2 -> Some i
         | _ -> cyc_op in
-      E.display i next1;
+      E.display (succ i) next2;
       find_loop_entry next1 next2 (succ i) e cyc_op
 
   let find_cycle init =
     E.display 1 init;
     (* Find (the smallest) i and e s.t. e = A(i) = A(2i) *)
-    let i, e = find_loop init (E.next init) 2 in
+    let i, e = find_loop (E.copy init) (E.next init) 2 in
     printf "Loop detected! (%d = %d [%d])@." (2*i) i i;
     (* Find (the smallest) k, c and x s.t. x = A(k) = A(i+k) 
        where c is A(c) = A(i) and i < c < 2i *)
-    let k, co, x = find_loop_entry init (E.next e) (succ i) e None in
+    let k, co, x =
+      find_loop_entry (E.copy init) (E.next e) (succ i) e None in
     let loop_size = match co with None -> i | Some c -> c-i+1 in
     printf "Loop entry found at %d!@." (k-i+1);
-    k-i+1, loop_size
+    (* E.display (k-i+1) x; *)
+    k-i+1, loop_size, x
 end
 
 (* Restartable Floyd's cycle detection *) 
@@ -163,7 +167,7 @@ module RestartableFloyd (E:ExprType) = struct
          find_loop_entry last1 last2 i e cyc_op in
     let loop_size = match co with None -> i | Some c -> c-i+1 in
     printf "Loop entry found at %d!@." (k-i+1);
-    k-i+1, loop_size
+    k-i+1, loop_size, x
 
   let find_cycle_restart expr fname =
     let auto, fname =
@@ -243,7 +247,7 @@ module Brent (E:ExprType) = struct
           find_loop last1 next2 (succ i) pow
                     
   let rec find_kth x1 k =
-    if k <= 1 then x1 else find_kth (E.next x1) (k-1)
+    if k <= 1 then x1 else find_kth (E.next_impure x1) (k-1)
 
   (* Find the entry of loop by starting with i such that e=A(i)=A(2i) *)
   (* and searching the smallest k with x = A(k) = A(i+k)              *)
@@ -251,8 +255,8 @@ module Brent (E:ExprType) = struct
   let rec find_loop_entry last1 last2 i =
     if E.equal last1 last2 then (i, last1)
     else
-      let next1 = E.next last1 in
-      let next2 = E.next last2 in
+      let next1 = E.next_impure last1 in
+      let next2 = E.next_impure last2 in
       E.display (succ i) next1;
       find_loop_entry next1 next2 (succ i)
 
@@ -260,16 +264,17 @@ module Brent (E:ExprType) = struct
     E.display 1 init;
     let next = E.next init in
     E.display 2 next;
-    (* Find (the smallest) c and e s.t. e = A(i) = A(i+c) with i=2**j-1 
+    (* Find (the smallest) c and e s.t. e = A(i) = A(i+c) with i=2**j-1
        with smallest j  *)
-    let loop_size, pow = find_loop init next 1 1 in
+    let loop_size, pow = find_loop (E.copy init) next 1 1 in
     printf "Loop detected! (%d = %d [%d])@." (pow+loop_size) pow loop_size;
     (* Compute A(c) *)
-    let e = find_kth init loop_size in
+    let e = find_kth (E.copy init) loop_size in
+    E.display 1 init;
     (* Find (the smallest) k and x s.t. x = A(k) = A(k+c) *)
-    let k, x = find_loop_entry init (E.next e) 1 in
+    let k, x = find_loop_entry init (E.next_impure e) 1 in
     printf "Loop entry found at %d!@." k;
-    k, loop_size
+    k, loop_size, x
 end
 
 (* Restartable Brent's algorithm *)
@@ -373,7 +378,7 @@ module RestartableBrent (E:ExprType) = struct
       | Init | FindLoop _ | FindKth _ -> find_loop_entry init (E.next e) 1
       | FindLoopEntry{last1;last2;i} -> find_loop_entry last1 last2 i in
     printf "Loop entry found at %d!@." k;
-    k, loop_size
+    k, loop_size, x
 
   let find_cycle_restart init fname =
     (* generate a filename if specifying no fileneme *)
@@ -411,3 +416,118 @@ module RestartableBrent (E:ExprType) = struct
               funcall state.elapsed opt_r;
       exit 0
 end
+
+module Gosper(E:ExprType) = struct
+  type t = E.t
+  (* To find A(n) = A(r) with n <> r *) 
+
+  (* Nu2(r) = k such that r = d * 2^k with some odd d. *)
+  (* M(n) = { u < n | u = max { r | Nu2(r+1) = k } for some k < log_2 n } *)
+  (* E.g., M(15) = { 7, 11, 13, 14 }     *)
+  (*       M(16) = { 7, 11, 13, 14, 15 } *)
+  (*       M(17) = { 7, 11, 13, 15, 16 } *)
+  (* The set { A(m) | m in M(n) } for each n is maintained. *)
+
+  (* counting trailing zeros *)
+  let ctz x =
+    let n = 0 in
+    let n, x = if x land 0xffffffff = 0 then n + 32, x lsr 32 else n, x in
+    let n, x = if x land 0xffff = 0 then n + 16, x lsr 16 else n, x in
+    let n, x = if x land 0xff = 0 then n + 8, x lsr 8 else n, x in
+    let n, x = if x land 0xf = 0 then n + 4, x lsr 4 else n, x in
+    let n, x = if x land 0x3 = 0 then n + 2, x lsr 2 else n, x in
+    if x land 0x1 = 0 then n + 1 else n
+  
+  let rec find_loop aset last i k =
+    if i > E.limit then begin
+      if E.limit > 1 then
+        eprintf "%d terms are all different.@." (2 * E.limit);
+      exit 0
+    end else
+      let next = E.next_impure last in
+      E.display i last;
+      let rec loop j =
+        if k <= j then None
+        else if E.equal next aset.(j) then Some j
+        else loop (succ j) in
+      match loop 0 with
+      | None ->
+         let r = ctz i in
+         aset.(r) <- E.copy next;
+         find_loop aset next (succ i) (if r = k then succ k else k)
+      | Some j ->
+         let j1 = 1 lsl j in
+         let i1 = i - 1 in
+         let n = i1 land (lnot (j1 - 1)) - (lnot i1) land  j1 in
+         i - n, n
+
+  let rec move_until_loop_size i e =
+    if i < 1 then e else move_until_loop_size (i-1) (E.next e)
+  
+  let rec find_loop_entry last1 last2 i =
+    E.display i last1;
+    if E.equal last1 last2 then i, last1
+    else find_loop_entry
+           (E.next_impure last1) (E.next_impure last2) (succ i)
+
+  let find_cycle init =
+    let aset = Array.make 64 init in
+    let loop_size, i = find_loop aset (E.copy init) 1 1 in
+    printf "Loop detected! (%d = %d [%d])@." (i+loop_size) i loop_size;
+    let e = move_until_loop_size loop_size (E.copy init) in
+    let k, x = find_loop_entry init e 1 in
+    printf "Loop entry found at %d!@." k;
+    k, loop_size, x
+
+end
+
+module RestartableGosper(E:ExprType) = struct
+  type t = E.t
+
+  type funcall =
+    | Init
+    | FindLoop of { last1: t; last2: t; i: int; pow: int }
+    | FindKth of { x1: t; k: int }
+    | FindLoopEntry of { last1: t; last2: t; i: int }
+
+  type state = { mutable init: t option;
+                 mutable find_loop: (int * int) option;
+                 mutable find_kth: t option;
+                 mutable funcall: funcall;
+                 mutable elapsed: float; }
+
+  exception Interrupted of state
+
+  let state = { init = None;
+                find_loop = None;
+                find_kth = None;
+                funcall = Init;
+                elapsed = 0.  }
+  let stime = ref (Unix.gettimeofday()) (* start time *)
+  let rfile = ref ""      (* the file name for restarting *)
+
+  let save_current_state state =
+    let elapsed = state.elapsed +. Unix.gettimeofday() -. !stime in
+    state.elapsed <- elapsed;
+    let oc = open_out !rfile in
+    output_value oc (RBrent, state);
+    close_out oc
+
+  (* Find loop by Brent's cycle-finding algorithm                    *)
+  (* to return k and pow such that A(pow=2**n) = A(pow+k) (1<=k<pow) *)
+  let rec find_loop a set last =
+    failwith"RestartableGosper.find_loop"
+
+  (* Find the entry of loop by starting with i such that e=A(i)=A(2i) *)
+  (* and searching the smallest k with x = A(k) = A(i+k)              *)
+  (* to return k and x                                                *)
+  let rec find_loop_entry last1 last2 i =
+    failwith"RestartableGosper.find_loop_entry"
+
+  let find_cycle_restart init fname =
+    failwith"RestartableGosper.find_loop_restart"
+    (* generate a filename if specifying no fileneme *)
+         
+end
+
+    

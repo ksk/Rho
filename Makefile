@@ -4,10 +4,10 @@ OCAMLOPT = ocamlopt
 OCAMLDEP = ocamldep
 
 OCAMLFLAGS =
-OCAMLLIBS = nums.cma unix.cma
-OCAMLOPTLIBS = nums.cmxa unix.cmxa
+OCAMLLIBS = unix.cma
+OCAMLOPTLIBS = unix.cmxa
 
-SRCS = store.ml cycle.ml
+SRCS = store.ml cycle.ml bexpr.ml
 
 all: rho bpoly
 opt: rho.opt bpoly.opt
@@ -23,8 +23,8 @@ rho.opt: store.cmx cycle.cmx rho.ml
 	${OCAMLOPT} -pp camlp4o $(OCAMLOPTLIBS) -o $@ $^
 
 bpoly: bpoly.bin bpoly.opt; @true
-bpoly.bin: store.cmo cycle.cmo bpoly.ml; ${OCAMLC} unix.cma -o $@ $^
-bpoly.opt: store.cmx cycle.cmx bpoly.ml; ${OCAMLOPT} unix.cmxa -o $@ $^
+bpoly.bin: store.cmo cycle.cmo bexpr.cmo bpoly.ml; ${OCAMLC} unix.cma -o $@ $^
+bpoly.opt: store.cmx cycle.cmx bexpr.cmx bpoly.ml; ${OCAMLOPT} unix.cmxa -o $@ $^
 
 depend: $(SRCS)
 	$(OCAMLDEP) $^ > depend

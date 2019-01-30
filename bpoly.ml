@@ -1,12 +1,13 @@
 open Format
 open Store
 open Cycle
+open Bexpr
 
 let limit = ref 65535
 type howshow =
   | Sum | Length | Height | Depth | BarChart
   (* | NumKind | BaseTwo | BaseTwoS | ShrinkL | ShrinkM | ShrinkF *)
-type mode = Naive | Floyd | Brent
+type mode = Naive | Floyd | Brent | Gosper
 type store = Map | Hashtbl
 type display = Quiet | Verbose | Every of int | Show of howshow list
 
@@ -18,129 +19,22 @@ let blist = ref []
 let wid = ref 1
 
 (* list representation in string *)
-(* n-th character denotes the number of 'n' in the list representation *)
-(* "\001\002\002\000\000\001" for 5.2.2.1.1.0 *)
-type expr = Bytes.t
-(* unsafe_get *)
-external ($!!) : expr -> int -> int = "%string_unsafe_get"
-external ($<-) : expr -> int -> int -> unit = "%string_unsafe_set"
+module B = ImpureBytes
+type expr = B.t
 
-let pp_expr prf expr =
-  let i = Bytes.length expr-1 in
-  fprintf prf "%*d" !wid i;
-  for j = 2 to expr $!! i do
-    fprintf prf ".%*d" !wid i
-  done;
-  for i = Bytes.length expr-2 downto 0 do
-    for j = 1 to expr $!! i do
-      fprintf prf ".%*d" !wid i
-    done
-  done
-
-let list_of_expr (expr:expr) =
-  let rec multi_add i num acc =
-    if num <= 0 then acc else multi_add i (num-1) (i::acc) in
-  let rec loop i acc =
-    if i >= Bytes.length expr then acc
-    else loop (i+1) (multi_add i (Char.code (Bytes.get expr i)) acc) in
-  loop 0 []
-
-let rec non_increasing = function
-  | [] | [_] -> true
-  | x::y::l -> x >= y && non_increasing (y::l)
-
-let expr_of_list list =
-  if non_increasing list then match list with
-  | [] -> invalid_arg "expr_of_list"
-  | n::l -> let expr = Bytes.make (n+1) '\000' in
-            List.iter (fun n -> (expr $<- n) (1+(expr $!! n))) list;
-            expr
-  else invalid_arg "expr_of_list"
-
-let expr_inc (expr:expr) i num =
-  let len = Bytes.length expr in
-  if i < len then begin
-    (expr $<- i) (num + (expr $!! i));
-    expr
-  end else
-    let newe = Bytes.make (i+1) '\000' in
-    Bytes.blit expr 0 newe 0 len;
-    (newe $<- i) num;
-    newe
-
-(* insert height i bar into expr[1..-1] and decrement all *)
-let insert_left (expr:expr) i num =
-  let len = Bytes.length expr in
-  let rec loop j i =
-    if j >= len then
-      let newe : expr = Bytes.make i '\000' in
-      Bytes.blit expr 1 newe 0 (len-1);
-      (newe $<- (i-1)) num;
-      newe
-    else if j >= i then
-      let newe : expr = Bytes.make (len-1) '\000' in
-      Bytes.blit expr 1 newe 0 (len-1);
-      (newe $<- (i-1)) (num + (newe $!! (i-1)));
-      newe
-    else
-      loop (j+1) (i + (expr $!! j)) in
-  loop 1 i
-
-(* insert height i bar into expr (after the most left bar is inserted) *)
-let insert_one expr i num =
-  let rec loop j i =
-    if j >= i then
-      (expr $<- i) (num + (expr $!! i))
-    else
-      loop (j+1) (i + (expr $!! j)) in
-  if num > 0 then loop 0 i
-
-let apply (expr1:expr) (expr2:expr) =
-  let zero1 = expr1 $!! 0 in
-  let len2 = Bytes.length expr2 in
-  (* first insert only the largest bar of expr2 to expr1 *)
-  let left2 = expr2 $!! (len2-1) in
-  let expr1 = insert_left expr1 (len2+zero1) left2 in
-  let rec insert_rest j =
-    if j >= 0 then begin
-      insert_one expr1 (zero1 + j) (expr2 $!! j);
-      insert_rest (j-1)
-    end in
-  insert_rest (len2-2);
-  expr1
-
-let repeat f n x =
-  let rec loop i acc = if i <= 0 then acc else loop (i-1) (f acc) in
-  loop n x
-
-(* fold expr lower to higher *)
-(* f 5 (f 2 (f 2 (f 1 (f 1 (f 0 e)))))  for 5.2.2.1.1.0 *)
-let expr_fold_up f e expr =
-  let len = Bytes.length expr in
-  let rec loop idx acc =
-    if idx < len then
-      loop (idx+1) (repeat (f idx) (expr $!! idx) acc)
-    else acc in
-  loop 0 e
-
-(* fold expr lower to higher *)
-(* f 0 (f 1 (f 1 (f 2 (f 2 (f 5 e)))))  for 5.2.2.1.1.0 *)
-let expr_fold_down f e expr =
-  let len = Bytes.length expr in
-  let rec loop idx acc =
-    if idx < 0 then acc
-    else loop (idx-1) (repeat (f idx) (expr $!! idx) acc) in
-  loop (len-1) e
-
-let expr_sum expr = expr_fold_up (+) 0 expr
-let expr_length expr = expr_fold_up (fun _->succ) 0 expr
-let expr_height expr = Bytes.length expr
+let expr_sum expr = B.expr_fold_up (+) 0 expr
+let expr_length expr = B.expr_fold_up (fun _->succ) 0 expr
+let expr_height expr =
+  1 + B.expr_fold_up max 0 expr (* Bytes.length expr *)
 let expr_depth expr =
-  fst (expr_fold_down (fun h (d,i) -> (max (i+h) d, i+1)) (0,0) expr)
+  fst (B.expr_fold_down (fun h (d,i) -> (max (i+h) d, i+1)) (0,0) expr)
 
+let expr_countzeros expr =
+  B.expr_fold_up (fun h c->if h=0 then succ c else c) 0 expr
+  
 let pp_bar_chart prf expr =
   fprintf prf "@[";
-  ignore (expr_fold_down (fun h b ->
+  ignore (B.expr_fold_down (fun h b ->
                           if b then fprintf prf "@\n";
                           for i = 1 to h do fprintf prf "#" done;
                           true) false expr);
@@ -167,64 +61,124 @@ let show_status disp = match disp with
   | Every cycle ->
      (fun i exp -> if i mod cycle = 0 then eprintf "\r%d... %!" i)
   | Verbose ->
-     (fun i exp -> printf "%3d => %a@." i pp_expr exp)
+     (fun i exp -> printf "%3d => %a@." i (B.pp_expr !wid) exp)
   | Show hss ->
      (fun i exp -> 
       printf "%d => [%a] %a@." i 
-             (pp_howshow_list exp) (List.rev hss) pp_expr exp)
+             (pp_howshow_list exp) (List.rev hss) (B.pp_expr !wid) exp)
 
 module type EStoreType = StoreType with type t = expr
 
 let rho_check stmod expr =
-  let module N = (Naive (struct
-                           type t = expr
-                           let limit = !limit
-                           let next e = apply e expr
-                           let equal = (=)
-                           let display = show_status !display
-                         end) ((val stmod : EStoreType))) in
+  let module N =
+    (Naive (struct
+         type t = expr
+         let limit = !limit
+         let next e = B.apply e expr
+         let next_impure x = next x
+         let copy x = B.copy x
+         let equal = B.equal
+         let display = show_status !display
+       end) ((val stmod : EStoreType))) in
   N.find_cycle expr
 
 let rho_check_floyd expr =
-  let module R = (Floyd (struct
-                           type t = expr
-                           let limit = !limit
-                           let next e = apply e expr
-                           let equal = (=)
-                           let display = show_status !display
-                         end)) in
+  let next_impure =
+    if expr_length expr = 1 then
+      let h = expr_height expr-1 in
+      (* fun e -> B.apply e expr *)
+      fun e -> B.apply_mono e h
+    else
+      (fun e -> B.apply e expr) in
+  let module R =
+    (Floyd (struct
+         type t = expr
+         let limit = !limit
+         let next_impure = next_impure
+         let next e = next_impure (B.copy e)
+         let copy x = B.copy x
+         let equal = B.equal
+         let display = show_status !display
+       end)) in
   R.find_cycle expr
 
 let rho_check_brent expr =
-  let module R = (Brent (struct
-                           type t = expr
-                           let limit = !limit
-                           let next e = apply e expr
-                           let equal = (=)
-                           let display = show_status !display
-                         end)) in
+  let next_impure =
+    if expr_length expr = 1 then
+      let h = expr_height expr-1 in
+      (fun e -> B.apply_mono e h)
+    else
+      (fun e -> B.apply e expr) in
+  let module R =
+    (Brent (struct
+         type t = expr
+         let limit = !limit
+         let next_impure = next_impure
+         let next e = next_impure (B.copy e)
+         let copy x = B.copy x
+         let equal = B.equal
+         let display = show_status !display
+       end)) in
+  R.find_cycle expr
+
+let rho_check_gosper expr =
+  let next_impure =
+    if expr_length expr = 1 then
+      let h = expr_height expr-1 in
+      (fun e -> B.apply_mono e h)
+    else
+      (fun e -> B.apply e expr) in
+  let module R =
+    (Gosper (struct
+         type t = expr
+         let limit = !limit
+         let next_impure = next_impure
+         let next e = next_impure (B.copy e)
+         let copy x = B.copy x
+         let equal = B.equal
+         let display = show_status !display
+       end)) in
   R.find_cycle expr
 
 let rho_check_restart_floyd expr fname =
-  let module R = (RestartableFloyd (struct
-                                     type t = expr
-                                     let limit = !limit
-                                     let next e = apply e expr
-                                     let equal = (=)
-                                     let display = show_status !display
-                                   end)) in
+  let module R =
+    (RestartableFloyd (struct
+         type t = expr
+         let limit = !limit
+         let next e = B.apply (B.copy e) expr
+         let next_impure x = next x
+         let copy x = B.copy x
+         let equal = (=)
+         let display = show_status !display
+       end)) in
   R.find_cycle_restart expr fname
 
 let rho_check_restart_brent expr fname =
-  let module R = (RestartableBrent (struct
-                                     type t = expr
-                                     let limit = !limit
-                                     let next e = apply e expr
-                                     let equal = (=)
-                                     let display = show_status !display
-                                   end)) in
+  let module R =
+    (RestartableBrent (struct
+         type t = expr
+         let limit = !limit
+         let next e = B.apply (B.copy e) expr
+         let next_impure x = next x
+         let copy x = B.copy x
+         let equal = (=)
+         let display = show_status !display
+       end)) in
   R.find_cycle_restart expr fname
 
+let rho_check_restart_gosper expr fname =
+  let module R =
+    (RestartableGosper (struct
+         type t = expr
+         let limit = !limit
+         let next e = B.apply (B.copy e) expr
+         let next_impure x = next x
+         let copy x = B.copy x
+         let equal = (=)
+         let display = show_status !display
+       end)) in
+  R.find_cycle_restart expr fname
+  
 let rec add_spec keys spec doc speclist = match keys with
   | [] -> speclist
   | key::keys' -> add_spec keys' spec doc ((key,spec,doc)::speclist)
@@ -255,6 +209,8 @@ let speclist = make_speclist [
   "Use Floyd's cycle-finding algorithm";
   ["-b";"-brent"], Arg.Unit(fun () -> mode := Brent),
   "Use Brent's cycle-finding algorithm";
+  ["-g";"-gosper"], Arg.Unit(fun () -> mode := Gosper),
+  "Use Gosper's cycle-finding algorithm";
   ["-r";"-restart"], Arg.String(fun s ->
                                 if !mode = Naive then mode := Floyd;
                                 restart_file := Some s),
@@ -284,14 +240,8 @@ let usage () = Arg.usage speclist usage_msg; exit 1
 let anon_fun str = 
   try blist := int_of_string str :: !blist with _ -> usage ()
 
-module MapStore = MakeMapStore(Bytes)
-
-module HashedBytes = struct
-  include Bytes
-  let hash (s:Bytes.t) = Hashtbl.hash s
-end
-
-module HashtblStore = MakeHashtblStore(HashedBytes)
+module MapStore = MakeMapStore(B)
+module HashtblStore = MakeHashtblStore(B)
 
 let make_stmod = function
   | Map -> (module MapStore : EStoreType)
@@ -299,12 +249,13 @@ let make_stmod = function
        
 let () =
   Arg.parse speclist anon_fun usage_msg;
-  let expr = expr_of_list (List.rev !blist) in
+  let expr = B.expr_of_list (List.rev !blist) in
   let show_mode mode_str =
     printf "Cycle detection mode: %s@." mode_str in
-  if !display = Quiet then printf "%3d => %a@." 1 pp_expr expr;
+  if !display = Quiet then
+    printf "%3d => %a@." 1 (B.pp_expr !wid) expr;
   let stime = Unix.gettimeofday() in
-  let start, cycle = match !mode with
+  let start, cycle, exp = match !mode with
     | Naive ->
        let stmod = make_stmod !store in
        show_mode "Naive";
@@ -324,7 +275,21 @@ let () =
                 rho_check_brent expr
              | Some fname ->
                 show_mode "Restartable (Brent)";
-                rho_check_restart_brent expr fname end in
+                rho_check_restart_brent expr fname end
+    | Gosper ->
+       match !restart_file with
+             | None ->
+                show_mode "Gosper";
+                rho_check_gosper expr
+             | Some fname ->
+                eprintf "Restartable (Gosper): not implemented yet@.";
+                exit 1
+                (*
+                  show_mode "Restartable (Gosper)";
+                  rho_check_restart_gosper expr fname *) in
+  let ftime = Unix.gettimeofday() in
   printf "Found! (%d = %d [%d])@." (start+cycle) start cycle;
+  printf "%d => %a@." start  (B.pp_expr !wid) exp;
   if !restart_file = None then
-   printf "Elapsed time: %.3f sec.@." (Unix.gettimeofday()-.stime)
+   printf "Elapsed time: %.3f sec.@." (ftime-.stime)
+  
