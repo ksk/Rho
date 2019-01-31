@@ -4,9 +4,7 @@ open Cycle
 open Bexpr
 
 let limit = ref 65535
-type howshow =
-  | Sum | Length | Height | Depth | BarChart
-  (* | NumKind | BaseTwo | BaseTwoS | ShrinkL | ShrinkM | ShrinkF *)
+type howshow = Sum | Length | Height | Depth | BarChart
 type algo = Naive | Floyd | Brent | Gosper
 type store = Map | Hashtbl
 type display = Quiet | Verbose | Every of int | Show of howshow list
@@ -26,8 +24,8 @@ module type Main = sig
   val main: unit -> unit
 end
 
-(* Generating Expr-dependent functions *)
-module MakeExprFuns(B:Expr) = struct
+(* Generating Expr-dependent functions for main *)
+module MakeMain(B:Expr) = struct
   let expr_sum expr = B.expr_fold_up (+) 0 expr
   let expr_length expr = B.expr_fold_up (fun _->succ) 0 expr
   let expr_height expr =
@@ -73,12 +71,9 @@ module MakeExprFuns(B:Expr) = struct
 
   module type EStoreType = StoreType with type t = B.t
 
-  module MapStore = MakeMapStore(B)
-  module HashtblStore = MakeHashtblStore(B)
-
   let make_stmod = function
-    | Map -> (module MapStore : EStoreType)
-    | Hashtbl -> (module HashtblStore : EStoreType)      
+    | Map -> (module MakeMapStore(B) : EStoreType)
+    | Hashtbl -> (module MakeHashtblStore(B) : EStoreType)      
                          
   let rho_check_naive stmod expr =
     let module N =
@@ -287,7 +282,7 @@ let speclist = make_speclist [
   "Keep on trying self applications unless the rho-property is found";
 
   ["-q";"-quiet"], Arg.Unit(fun () -> display := Quiet),
-  "Quiet algo";
+  "Quiet mode";
   ["-e";"-every"], Arg.Int(fun i -> display := Every i),
   "Display only status every n";
 
@@ -314,7 +309,7 @@ let speclist = make_speclist [
   ["-r";"-restart"], Arg.String(fun s ->
                                 if !algo = Naive then algo := Floyd;
                                 restart_file := Some s),
-  "Running with restartable algo (default: Floyd's cycle-finding algorithm)";
+  "Running with restartable mode (default: Floyd's cycle-finding algorithm)";
   ["-R";"-restart-auto"], Arg.Unit(fun () ->
                                    if !algo = Naive then algo := Floyd;
                                    restart_file := Some ""),
@@ -343,6 +338,7 @@ let anon_fun str =
 
 let () =
   Arg.parse speclist anon_fun usage_msg;
+  if !blist = [] then usage ();
   let module B = (val !bexpr: Expr) in
-  let module M = (val (module MakeExprFuns(B)): Main) in
+  let module M = (val (module MakeMain(B)): Main) in
   M.main ()
