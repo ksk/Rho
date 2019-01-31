@@ -1,8 +1,12 @@
 open Format
 
+let repeat f n x =
+  let rec loop i acc = if i <= 0 then acc else loop (i-1) (f acc) in
+  loop n x
+
 module type Expr = sig
   type t
-  val pp_expr: int -> formatter -> t -> unit
+  val pp_expr: int (* width of digit *) -> formatter -> t -> unit
   val compare: t -> t -> int
   val equal: t -> t -> bool
   val hash: t -> int
@@ -123,10 +127,7 @@ module PureBytes: Expr = struct
     (* printf "expr=%a (%S); h=%d@." (pp_expr 1) expr (Obj.magic expr) h; *)
     insert_left expr (succ h + (expr $!! 0)) 1
 
-  let repeat f n x =
-    let rec loop i acc = if i <= 0 then acc else loop (i-1) (f acc) in
-    loop n x
-    
+
   (* fold expr lower to higher *)
   (* f 5 (f 2 (f 2 (f 1 (f 1 (f 0 e)))))  for 5.2.2.1.1.0 *)
   let expr_fold_up f e expr =
@@ -196,10 +197,6 @@ module ImpureBytes: Expr = struct
          {bytes; from=0; upto=n}
     else invalid_arg "expr_of_list"
     
-  let repeat f n x =
-    let rec loop i acc = if i <= 0 then acc else loop (i-1) (f acc) in
-    loop n x
-
   let expr_fold_up f e {bytes;from;upto} =
     let rec loop i acc =
       if upto < i then acc
@@ -317,3 +314,290 @@ module ImpureBytes: Expr = struct
   let equal e1 e2 = compare e1 e2 = 0
 
 end 
+
+module ZBytes = struct
+  type t = Z.t
+
+  let isucc = succ
+  let (+/) = (+)
+  let (-/) = (-)
+  let (<=/) (x:int) = (<=) x
+  let log2span = 3
+  let span = 1 lsl log2span (* 8-bit span *)
+  let n_span n = n lsl log2span
+
+  open Z
+  let (!/) = to_int 
+  let mask = one lsl span - one
+
+  let repeat f n x =
+    let rec loop i acc =
+      if i = zero then acc else loop (pred i) (f acc) in
+    loop n x
+
+  let list_of_expr exp =
+    let rec loop i e acc =
+      if e = zero then acc
+      else loop (isucc i) (e asr span)
+             (repeat (fun l->i::l) (e land mask) acc) in
+    loop 0 exp []
+
+  let expr_fold_up f e exp =
+    List.fold_left (fun x i -> f i x) e (List.rev (list_of_expr exp))
+    
+  let expr_fold_down f e exp =
+    List.fold_left (fun x i -> f i x) e (list_of_expr exp)
+  
+  let pp_expr wid prf expr =
+    match list_of_expr expr with
+    | [] -> invalid_arg "ZBytes.pp_expr"
+    | hd::tl ->
+       fprintf prf "%*d" wid hd; List.iter (fprintf prf ".%*d" wid) tl
+
+  let expr_of_list l =
+    let rec loop l acc = match l with
+      | [] -> acc
+      | h::l -> loop l (acc + one lsl n_span h) in
+    loop l zero
+      
+
+
+  let compare = compare
+  let equal = (=)
+  let hash = hash
+  let copy x = x
+
+  let insert_bar exp h num =
+    let rec loop e cur i h =
+      if cur = zero then e lor (num lsl n_span h)
+      else if h <=/ i then e + num lsl n_span h
+      else loop e (cur asr span) (isucc i) (h +/ !/(cur land mask)) in
+    loop exp exp 0 h
+
+  let apply_nums exp nums h =
+    let zeros = !/ (exp land mask) in
+    let rec loop e ns h = match ns with
+      | [] -> e 
+      | n::ns -> loop (insert_bar e (h+/zeros) n) ns (h-/1) in
+    loop (exp asr span) nums (h-/1)
+
+  let apply exp1 exp2 =
+    let rec loop e2 ns h =
+      if e2 = zero then apply_nums exp1 ns h
+      else loop (e2 asr span) (e2 land mask :: ns) (isucc h) in
+    loop exp2 [] 0
+
+  let ($$) l1 l2 =
+    list_of_expr(apply(expr_of_list l1)(expr_of_list l2))
+
+  let apply_mono exp h =
+    let zeros = !/ (exp land mask) in
+    insert_bar (exp asr span) (h+/zeros) one
+
+end
+
+(* Using bits for the sequence of 0 (B x) and 1 (x o B) *)
+(* This is just for a test (does not work for bigger terms)  *)
+module IntBitSeq = struct
+  type t = int
+
+  (* 1:B; x0: B x; x1: B x B *)
+  let rev_list_of_expr expr =
+    assert (expr <> 0);
+    let rec to_revpoly e =
+      if e land 1 = 0 then
+        List.map succ (to_revpoly (e lsr 1))
+      else if e = 1 then
+        [0]
+      else
+        0 :: to_revpoly (e lsr 1) in
+    to_revpoly expr
+
+  let list_of_expr expr =
+    List.rev (rev_list_of_expr expr)
+
+  let pp_expr wid prf expr =
+    match list_of_expr expr with
+    | [] -> invalid_arg "IntBits.pp_expr"
+    | hd::tl ->
+       fprintf prf "%*d" wid hd; List.iter (fprintf prf ".%*d" wid) tl
+
+  let compare (x:int) (y:int) = compare x y
+  let equal = (=)
+  let hash (x:int) = Hashtbl.hash x
+
+  let copy x = x
+
+  let expr_of_list l =
+    let rec loop l =
+      match l with
+      | [x] -> 1 lsl x
+      | x::xs -> ((loop (List.map (fun y->y-x) xs) lsl 1) lor 1) lsl x
+      | [] -> invalid_arg "IntBits.expr_of_list" in
+    loop (List.rev l)
+
+  let apply1 exp1 exp2 =
+    let rec loop e1 e2 =
+      if e1 land 1 = 0 then loop0 (e1 lsr 1) e2
+      else if e1 = 1 then e2 lsl 1
+      else loop (e1 lsr 1) (e2 lsl 1)
+    and loop0 e1 e2 =
+      if e2 land 1 = 0 then
+        if e1 land 1 = 0 then loop0 (e1 lsr 1) (e2 lsr 1) lsl 1
+        else if e1 = 1 then (e2 lsl 2) lor 1
+        else (loop0 (e1 lsr 1) (e2 lsl 1) lsl 1) lor 1
+      else if e2 = 1 then (e1 lsl 1) lor 1
+      else (loop0 e1 (e2 lsr 1) lsl 1) lor 1 in
+    loop exp1 exp2
+
+  (* tail recursive *)
+  let apply2 exp1 exp2 =
+    let rec loop e1 e2 ofs acc =
+      if e1 land 1 = 0 then loop0 (e1 lsr 1) e2 ofs acc
+      else if e1 = 1 then (e2 lsl succ ofs) lor acc
+      else loop (e1 lsr 1) (e2 lsl 1) ofs acc
+    and loop0 e1 e2 ofs acc =
+      if e2 land 1 = 0 then
+        if e1 land 1 = 0 then
+          loop0 (e1 lsr 1) (e2 lsr 1) (succ ofs) acc
+        else if e1 = 1 then (((e2 lsl 2) lor 1) lsl ofs) lor acc
+        else loop0 (e1 lsr 1) (e2 lsl 1)
+               (succ ofs) ((1 lsl ofs) lor acc)
+      else if e2 = 1 then (((e1 lsl 1) lor 1) lsl ofs) lor acc
+      else loop0 e1 (e2 lsr 1) (succ ofs) ((1 lsl ofs) lor acc) in
+    loop exp1 exp2 0 0
+  
+  (* let ($$) l1 l2 =
+   *   list_of_expr(apply (expr_of_list l1) (expr_of_list l2));; *)
+
+  let apply = apply2
+
+  let apply_mono exp h =
+    let rec loop e h ofs acc =
+      if e land 1 = 0 then loop0 (e lsr 1) h ofs acc
+      else if e = 1 then (2 lsl (h+ofs)) lor acc
+      else loop (e lsr 1) (succ h) ofs acc 
+    and loop0 e h ofs acc =
+      if h = 0 then (((e lsl 1) lor 1) lsl ofs) lor acc
+      else if e land 1 = 0 then loop0 (e lsr 1) (h-1) (succ ofs) acc
+      else if e = 1 then (((1 lsl (h+2)) lor 1) lsl ofs) lor acc
+      else loop0 (e lsr 1) (succ h) (succ ofs) ((1 lsl ofs) lor acc) in
+    loop exp h 0 0
+
+  let expr_fold_up f e exp =
+    List.fold_left (fun x i -> f i x) e (rev_list_of_expr exp)
+    
+  let expr_fold_down f e exp =
+    List.fold_left (fun x i -> f i x) e (list_of_expr exp)
+end
+
+(* Using bits for the sequence of 0 (B x) and 1 (x o B) *)
+module ZBitSeq = struct
+  type t = Z.t
+  let iadd = (+)
+  let isub = (-)
+  let isucc = succ
+  open Z
+  
+  let rev_list_of_expr expr =
+    assert (expr <> zero);
+    let rec to_revpoly e =
+      if is_odd e then
+        if e = one then [0]
+        else 0 :: to_revpoly (e asr 1) 
+      else List.map isucc (to_revpoly (e asr 1)) in
+    to_revpoly expr
+
+  let list_of_expr expr =
+    List.rev (rev_list_of_expr expr)
+
+  let pp_expr wid prf expr =
+    match list_of_expr expr with
+    | [] -> invalid_arg "IntBitSeq.pp_expr"
+    | hd::tl ->
+       fprintf prf "%*d" wid hd; List.iter (fprintf prf ".%*d" wid) tl
+
+  let compare = Z.compare
+  let equal = (=)
+  let hash = Z.hash
+
+  let copy x = x
+
+  let expr_of_list l =
+    let rec loop l =
+      match l with
+      | [x] -> one lsl x
+      | x::xs ->
+         ((loop (List.map (fun y->isub y x) xs)
+           lsl 1) lor one) lsl x
+      | [] -> invalid_arg "ZBitSeq.expr_of_list" in
+    loop (List.rev l)
+
+  let apply1 exp1 exp2 =
+    let rec loop e1 e2 =
+      if is_odd e1 then
+        if e1 = one then e2 lsl 1
+        else loop (e1 asr 1) (e2 lsl 1)
+      else loop0 (e1 asr 1) e2 
+    and loop0 e1 e2 =
+      if is_odd e2 then
+        if e2 = one then (e1 lsl 1) lor one
+        else (loop0 e1 (e2 asr 1) lsl 1) lor one
+      else
+        if is_odd e1 then
+          if e1 = one then (e2 lsl 2) lor one
+          else (loop0 (e1 asr 1) (e2 lsl 1) lsl 1) lor one
+        else
+          loop0 (e1 asr 1) (e2 asr 1) lsl 1 in
+    loop exp1 exp2
+
+  (* tail recursive *)
+  let apply2 exp1 exp2 =
+    let rec loop e1 e2 ofs acc =
+      if is_odd e1 then
+        if e1 = one then (e2 lsl isucc ofs) lor acc
+        else loop (e1 asr 1) (e2 lsl 1) ofs acc
+      else
+        loop0 (e1 asr 1) e2 ofs acc
+    and loop0 e1 e2 ofs acc =
+      if is_odd e2 then
+        if e2 = one then (((e1 lsl 1) lor one) lsl ofs) lor acc
+        else loop0 e1 (e2 asr 1) (isucc ofs) ((one lsl ofs) lor acc)
+      else
+        if is_odd e1 then
+          if e1 = one then (((e2 lsl 2) lor one) lsl ofs) lor acc
+          else loop0 (e1 asr 1) (e2 lsl 1)
+                 (isucc ofs) ((one lsl ofs) lor acc)
+        else loop0 (e1 asr 1) (e2 asr 1) (isucc ofs) acc in
+    loop exp1 exp2 0 zero
+  
+  (* let ($$) l1 l2 =
+   *   list_of_expr(apply (expr_of_list l1) (expr_of_list l2));; *)
+
+  let apply = apply2
+
+  let apply_mono exp h =
+    let rec loop e h ofs acc =
+      if is_odd e then 
+        if e = one then (one lsl isucc(iadd h ofs)) lor acc
+        else loop (e asr 1) (isucc h) ofs acc 
+      else
+        loop0 (e asr 1) h ofs acc
+    and loop0 e h ofs acc =
+      if h = 0 then (((e lsl 1) lor one) lsl ofs) lor acc
+      else
+        if is_odd e then
+          if e = one then
+            (((one lsl iadd h 2) lor one) lsl ofs) lor acc
+          else loop0 (e asr 1) (isucc h) (isucc ofs)
+                 ((one lsl ofs) lor acc)
+        else loop0 (e asr 1) (isub h 1) (isucc ofs) acc in
+    loop exp h 0 zero
+
+  let expr_fold_up f e exp =
+    List.fold_left (fun x i -> f i x) e (rev_list_of_expr exp)
+    
+  let expr_fold_down f e exp =
+    List.fold_left (fun x i -> f i x) e (list_of_expr exp)
+
+end
