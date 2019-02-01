@@ -12,7 +12,7 @@ type display = Quiet | Verbose | Every of int | Show of howshow list
 let restart_file : string option ref = ref None
 let algo = ref Naive
 let store = ref Hashtbl
-let bexpr = ref (module ImpureBytes: Expr)
+let bexpr = ref (module PureBytes: Expr)
 let display = ref Verbose
 let blist = ref []
 let wid = ref 1
@@ -224,37 +224,7 @@ module MakeMain(B:Expr) = struct
     if !display = Quiet then
       printf "%3d => %a@." 1 (B.pp_expr !wid) expr;
     let stime = Unix.gettimeofday() in
-    let start, cycle, exp = match !algo with
-      | Naive ->
-         let stmod = make_stmod !store in
-         show_algo "Naive";
-         rho_check_naive stmod expr
-      | Floyd ->
-         begin match !restart_file with
-         | None ->
-            show_algo "Floyd";
-            rho_check_floyd expr
-         | Some fname ->
-            show_algo "Floyd (restartable)";
-            rho_check_restart_floyd expr fname end
-      | Brent ->
-         begin match !restart_file with
-         | None ->
-            show_algo "Brent";
-            rho_check_brent expr
-         | Some fname ->
-            show_algo "Brent (restartable)";
-            rho_check_restart_brent expr fname end
-      | Gosper ->
-         match !restart_file with
-         | None ->
-            show_algo "Gosper";
-            rho_check_gosper expr
-         | Some fname ->
-            eprintf "Gosper (restartable): not implemented yet@.";
-            exit 1
-    (* show_algo "Gosper (Restartable)";
-                  rho_check_restart_gosper expr fname *) in
+    let start, cycle, exp = rho_check expr in
     let ftime = Unix.gettimeofday() in
     printf "Found! (%d = %d [%d])@." (start+cycle) start cycle;
     printf "%d => %a@." start  (B.pp_expr !wid) exp;
