@@ -76,12 +76,18 @@ module MakeMain(B:Expr) = struct
     | Hashtbl -> (module MakeHashtblStore(B) : EStoreType)      
                          
   let rho_check_naive stmod expr =
+    let next_impure =
+      if expr_length expr = 1 then
+        let h = expr_height expr-1 in
+        (fun e -> B.apply_mono e h) 
+      else
+        (fun e -> B.apply e expr) in
     let module N =
       (Naive (struct
            type t = B.t
            let limit = !limit
-           let next e = B.apply e expr
-           let next_impure x = next x
+           let next_impure = next_impure
+           let next e = next_impure (B.copy e)
            let copy x = B.copy x
            let equal = B.equal
            let display = show_status !display
@@ -92,8 +98,7 @@ module MakeMain(B:Expr) = struct
     let next_impure =
       if expr_length expr = 1 then
         let h = expr_height expr-1 in
-        (* fun e -> B.apply e expr *)
-        fun e -> B.apply_mono e h
+        (fun e -> B.apply_mono e h) 
       else
         (fun e -> B.apply e expr) in
     let module R =

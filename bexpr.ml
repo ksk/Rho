@@ -124,7 +124,7 @@ module PureBytes: Expr = struct
     expr1
 
   let apply_mono expr h =
-    (* printf "expr=%a (%S); h=%d@." (pp_expr 1) expr (Obj.magic expr) h; *)
+    (* printf "expr=%a (%S); h=%d@." (pp_expr 1) expr (Bytes.to_string expr) h; *)
     insert_left expr (succ h + (expr $!! 0)) 1
 
 
@@ -162,6 +162,10 @@ module ImpureBytes: Expr = struct
         fprintf prf ".%*d" wid (i-from)
       done
     done
+
+  (* let pp_expr wid prf {bytes;from;upto} =
+   *   pp_expr wid prf {bytes;from;upto};
+   *   fprintf prf " %S[%d..%d]" (Bytes.to_string bytes) from upto *)
 
   let b_max = 256
 
@@ -209,39 +213,28 @@ module ImpureBytes: Expr = struct
       else loop (i-1) (repeat (f (i-from)) (bytes $!! i) acc) in
     loop upto e
 
-  let hash e = expr_fold_down (fun i x -> (x lsl 3) + i + 1) 0 e
+  let hash e = Hashtbl.hash (list_of_expr e)
 
   let insert_one ({bytes;from;upto} as expr) b num =
     let rec loop i b =
-      (* printf "b=%d; (from,upto)=(%d,%d); i=%d; e=%a@."
-       *   b from upto i (pp_expr 1) expr; *)
       if upto < i then
         let b_max = Bytes.length bytes in
         if b < b_max then begin
-            for j = upto+1 to b-1 do (bytes $<- j) 0 done;
             (bytes $<- b) num;
             { expr with from; upto = b }
         end else if b_max lsr 1 < from then
           let b = b - from in
-          (* printf "%S@." (Obj.magic bytes);
-           * printf "2:b=%d, from=%d, upto=%d@." b from upto; *)
-          (* printf "-%S[%d..%d] (%a)"
-           *   (Obj.magic expr.bytes) expr.from expr.upto (pp_expr 1) expr;
-           * printf " %d %d %d@." from 0 (upto-from+1); *)
           Bytes.blit bytes from bytes 0 (upto-from+1);
-          for j = upto-from+1 to b-1 do (bytes $<- j) 0 done;
+          (* cleaning for the future use *) 
+          for j = from to b_max-1 do (bytes $<- j) 0 done;
           (bytes $<- b) num;
-          (* printf "%S@." (Obj.magic bytes); *)
           { expr with from = 0; upto = b }
         else
           let b = b - from in
-          (* printf "3:b=%d, from=%d, upto=%d@." b from upto; *)
           let bs = Bytes.make (b_max lsl 1) '\000' in
           let upto = upto - from in
-          (* printf "bytes=%S@.bs=%S@." (Obj.magic bytes) (Obj.magic bs); *)
           Bytes.blit bytes from bs 0 (upto+1);
           (bs $<- b) num;
-          (* printf "bytes=%S@.bs=%S@." (Obj.magic bytes) (Obj.magic bs); *)
           { bytes=bs; from = 0; upto=b }
       else if b = i then begin
         (bytes $<- i) (num + (bytes $!! i));
@@ -251,43 +244,20 @@ module ImpureBytes: Expr = struct
     if num > 0 then loop from (b+from) else expr
 
   let apply {bytes=b1;from=f1;upto=u1} {bytes=b2;from=f2;upto=u2} =
-    (* printf "---@."; *)
     let base = b1 $!! f1 in
+    (b1 $<- f1) 0; (* clear after checking base *)
     let f1 = succ f1 in
     let rec loop e1 u2 =
-      (* printf "e1=%a; f2=%d, u2=%d@." (pp_expr 1) e1 f2 u2;
-       * printf "%S[%d..%d] %a@."
-       *   (Obj.magic e1.bytes) e1.from e1.upto (pp_expr 1) e1; *)
       if u2 < f2 then e1
       else loop (insert_one e1 (base+u2-f2) (b2 $!! u2)) (u2-1) in
     loop {bytes=b1;from=f1;upto=u1} u2
 
   let apply_mono {bytes;from;upto} h =
-    (* printf "e=%a; h=%d; q=%d@." (pp_expr 1) {bytes;from;upto} h (h+(bytes$!! from));
-     * printf "  %S[%d..%d]@." (Obj.magic bytes) from upto; *)
-    insert_one {bytes; from = succ from; upto} (h+(bytes$!! from)) 1
-
-  (* to count the maximum number of zeros *)
-  (* let apply_mono =
-    let nz = ref 0 in
-    fun {bytes;from;upto} h ->
-      let res = apply_mono {bytes;from;upto} h in
-      let z = res.bytes $!! res.from in
-      if !nz < z then begin
-        printf "            nz <= %d@." z;
-        nz := z;
-      end;
-      res *)
+    let base = bytes$!! from in
+    (bytes$<-from) 0;
+    insert_one {bytes; from = succ from; upto} (h+base) 1
 
   let compare {bytes=b1;from=f1;upto=u1} {bytes=b2;from=f2;upto=u2} =
-    (* printf "e1=%a; e2=%a@."
-     *   (pp_expr 1) {bytes=b1;from=f1;upto=u1} 
-     *   (pp_expr 1) {bytes=b2;from=f2;upto=u2};
-     * printf "h1=%d; h2=%d@."
-     *   (hash {bytes=b1;from=f1;upto=u1})
-     *   (hash {bytes=b2;from=f2;upto=u2});
-     * printf " b1=%S[%d..%d]@. b2=%S[%d..%d]@."
-     *   (Obj.magic b1) f1 u1 (Obj.magic b2) f2 u2; *)
     match compare (u1-f1) (u2-f2) with
     | 0 ->
        let rec loop i1 i2 =
@@ -297,19 +267,6 @@ module ImpureBytes: Expr = struct
               | neq -> neq in
        loop f1 f2
     | neq -> neq
-
-  (* let compare e1 e2 =
-   *   let s1 = Format.asprintf "%a" (pp_expr 1) e1 in
-   *   let s2 = Format.asprintf "%a" (pp_expr 1) e2 in
-   *   let ce = compare e1 e2 in
-   *   let cs = String.compare s1 s2 in
-   *   if  ce * ce <> cs * cs then begin
-   *       printf "e1=%a; e2=%a@." (pp_expr 1) e1 (pp_expr 1) e2;
-   *       printf " b1=%S[%d..%d]@. b2=%S[%d..%d]@."
-   *         (Obj.magic e1.bytes) e1.from e1.upto
-   *         (Obj.magic e2.bytes) e2.from e2.upto
-   *     end;
-   *   compare e1 e2 *)
 
   let equal e1 e2 = compare e1 e2 = 0
 
