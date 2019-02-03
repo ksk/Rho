@@ -20,15 +20,15 @@ install: opt
 
 rho: rho.bin rho.opt; @true
 rho.bin: store.cmo cycle.cmo rho.ml
-	$(OCAMLC) -pp camlp4o $(OCAMLLIBS) -o $@ $^
+	$(OCAMLC) -pp camlp4o $(OCAMLFLAGS) $(OCAMLLIBS) -o $@ $^
 rho.opt: store.cmx cycle.cmx rho.ml
-	$(OCAMLOPT) -pp camlp4o $(OCAMLOPTLIBS) -o $@ $^
+	$(OCAMLOPT) -pp camlp4o $(OCAMLFLAGS) $(OCAMLOPTLIBS) -o $@ $^
 
 bpoly: bpoly.bin bpoly.opt; @true
 bpoly.bin: store.cmo cycle.cmo bexpr.cmo bpoly.ml
 	$(OCAMLFIND) $(OCAMLC) $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLLIBS) zarith.cma -o $@ $^
 bpoly.opt: store.cmx cycle.cmx bexpr.cmx bpoly.ml
-	$(OCAMLFIND) $(OCAMLOPT) $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLOPTLIBS) zarith.cmxa -o $@ $^
+	$(OCAMLFIND) $(OCAMLOPT) -O3 $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLOPTLIBS) zarith.cmxa -o $@ $^
 
 depend: $(SRCS)
 	$(OCAMLDEP) $^ > depend
@@ -37,7 +37,7 @@ depend: $(SRCS)
 
 .SUFFIXES: .ml .mli .mly .mll .cmo .cmx .cmi
 .ml.cmo: ; $(OCAMLFIND) $(OCAMLC) $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLLIBS) -c $<
-.ml.cmx: ; $(OCAMLFIND) $(OCAMLOPT) $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLOPTLIBS) -c $<
+.ml.cmx: ; $(OCAMLFIND) $(OCAMLOPT) -Oclassic -inlining-report $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLOPTLIBS) -c $<
 .mli.cmi: ; $(OCAMLC) $(OCAMLFLAGS) $(OCAMLLIBS) -c $<
 .mly.ml: ; $(OCAMLYACC) -v $<
 .mly.mli: ; $(OCAMLYACC) $<

@@ -26,19 +26,36 @@ end
 
 (* Generating Expr-dependent functions for main *)
 module MakeMain(B:Expr) = struct
-  let expr_sum expr = B.expr_fold_up (+) 0 expr
-  let expr_length expr = B.expr_fold_up (fun _->succ) 0 expr
+
+  let pp_expr wid prf expr =
+    match B.list_of_expr expr with
+    | [] -> invalid_arg "BitSeq.pp_expr"
+    | hd::tl ->
+       fprintf prf "%*d" wid hd; List.iter (fprintf prf ".%*d" wid) tl
+
+  (* fold expr lower to higher *)
+  (* f 5 (f 2 (f 2 (f 1 (f 1 (f 0 e)))))  for 5.2.2.1.1.0 *)
+  let expr_fold_up f e exp =
+    List.fold_left (fun x i -> f i x) e (B.rev_list_of_expr exp)
+    
+  (* fold expr lower to higher *)
+  (* f 0 (f 1 (f 1 (f 2 (f 2 (f 5 e)))))  for 5.2.2.1.1.0 *)
+  let expr_fold_down f e exp =
+    List.fold_left (fun x i -> f i x) e (B.list_of_expr exp)
+
+  let expr_sum expr = expr_fold_up (+) 0 expr
+  let expr_length expr = expr_fold_up (fun _->succ) 0 expr
   let expr_height expr =
-    1 + B.expr_fold_up max 0 expr (* Bytes.length expr *)
+    1 + expr_fold_up max 0 expr (* Bytes.length expr *)
   let expr_depth expr =
-    fst (B.expr_fold_down (fun h (d,i) -> (max (i+h) d, i+1)) (0,0) expr)
+    fst (expr_fold_down (fun h (d,i) -> (max (i+h) d, i+1)) (0,0) expr)
     
   let expr_countzeros expr =
-    B.expr_fold_up (fun h c->if h=0 then succ c else c) 0 expr
+    expr_fold_up (fun h c->if h=0 then succ c else c) 0 expr
     
   let pp_bar_chart prf expr =
     fprintf prf "@[";
-    ignore (B.expr_fold_down (fun h b ->
+    ignore (expr_fold_down (fun h b ->
                 if b then fprintf prf "@\n";
                 for i = 1 to h do fprintf prf "#" done;
                 true) false expr);
@@ -63,11 +80,11 @@ module MakeMain(B:Expr) = struct
     | Every cycle ->
        (fun i exp -> if i mod cycle = 0 then eprintf "\r%d... %!" i)
     | Verbose ->
-       (fun i exp -> printf "%3d => %a@." i (B.pp_expr !wid) exp)
+       (fun i exp -> printf "%3d => %a@." i (pp_expr !wid) exp)
     | Show hss ->
        (fun i exp -> 
          printf "%d => [%a] %a@." i 
-           (pp_howshow_list exp) (List.rev hss) (B.pp_expr !wid) exp)
+           (pp_howshow_list exp) (List.rev hss) (pp_expr !wid) exp)
 
   module type EStoreType = StoreType with type t = B.t
 
@@ -227,12 +244,12 @@ module MakeMain(B:Expr) = struct
     (* Arg.parse speclist anon_fun usage_msg; *)
     let expr = B.expr_of_list (List.rev !blist) in
     if !display = Quiet then
-      printf "%3d => %a@." 1 (B.pp_expr !wid) expr;
+      printf "%3d => %a@." 1 (pp_expr !wid) expr;
     let stime = Unix.gettimeofday() in
     let start, cycle, exp = rho_check expr in
     let ftime = Unix.gettimeofday() in
     printf "Found! (%d = %d [%d])@." (start+cycle) start cycle;
-    printf "%d => %a@." start  (B.pp_expr !wid) exp;
+    printf "%d => %a@." start  (pp_expr !wid) exp;
     if !restart_file = None then
       printf "Elapsed time: %.3f sec.@." (ftime-.stime)
 
@@ -266,11 +283,14 @@ let speclist = make_speclist [
 
   ["-E";"-exp"], Arg.String(fun e ->
                      let module B = (val match e with
-                     (* | "IS" -> (module IntBitSeq) *)
+                     | "IS" -> (module IntBitSeq) (* DO NOT USE *)
+                     | "DS" -> (module DIntBitSeq)
                      | "ZS" -> (module ZBitSeq)
                      | "ZB" -> (module ZBytes)
                      | "PB" -> (module PureBytes)
+                     | "P2" -> (module PureBytes2)
                      | "IB" -> (module ImpureBytes)
+                     | "I2" -> (module ImpureBytes2)
                      | _ -> raise (Arg.Bad "Unknown internal representation mode"): Expr) in
                      bexpr := (module B)),
   "Select internal representation of decreasing polynomials (ZS|ZB|PB|IB";
