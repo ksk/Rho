@@ -37,7 +37,7 @@ depend: $(SRCS)
 
 .SUFFIXES: .ml .mli .mly .mll .cmo .cmx .cmi
 .ml.cmo: ; $(OCAMLFIND) $(OCAMLC) $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLLIBS) -c $<
-.ml.cmx: ; $(OCAMLFIND) $(OCAMLOPT) -Oclassic -inlining-report $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLOPTLIBS) -c $<
+.ml.cmx: ; $(OCAMLFIND) $(OCAMLOPT) $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLOPTLIBS) -c $<
 .mli.cmi: ; $(OCAMLC) $(OCAMLFLAGS) $(OCAMLLIBS) -c $<
 .mly.ml: ; $(OCAMLYACC) -v $<
 .mly.mli: ; $(OCAMLYACC) $<
