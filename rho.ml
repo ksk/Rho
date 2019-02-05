@@ -407,7 +407,8 @@ let speclist = make_speclist [
   ["-f";"-floyd-cycle"], Arg.Unit(fun () -> loop_detection := Floyd),
   "Use Floyd's cycle-finding algorithm";
   ["-b";"-brent-cycle"], Arg.Unit(fun () -> loop_detection := Brent),
-  "Use Brent's cycle-finding algorithm";
+
+  "Use Improved Brent's cycle-finding algorithm";
   ["-g";"-gosper-cycle"], Arg.Unit(fun () -> loop_detection := Gosper),
   "Use Gosper's cycle-finding algorithm";
 

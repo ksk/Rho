@@ -148,7 +148,7 @@ module MakeMain(B:Expr) = struct
            let display = show_status !display
          end)) in
     R.find_cycle expr
-    
+
   let rho_check_gosper expr =
     let next_impure =
       if expr_length expr = 1 then
@@ -299,6 +299,7 @@ let speclist = make_speclist [
   "Use Floyd's cycle-finding algorithm";
   ["-b";"-brent"], Arg.Unit(fun () -> algo := Brent),
   "Use Brent's cycle-finding algorithm";
+
   ["-g";"-gosper"], Arg.Unit(fun () -> algo := Gosper),
   "Use Gosper's cycle-finding algorithm";
   ["-r";"-restart"], Arg.String(fun s ->

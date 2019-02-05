@@ -226,7 +226,7 @@ end
 *)
 
 (* Brent's algorithm *)
-module Brent (E:ExprType) = struct
+module SimpleBrent (E:ExprType) = struct
   type t = E.t
 
   (* Find loop by Brent's cycle-finding algorithm                    *)
@@ -238,20 +238,27 @@ module Brent (E:ExprType) = struct
       exit 0
     end else
       if E.equal last1 last2 then (i,pow)
-      else 
-        let next2 = E.next last2 in
-        E.display (pow+i+1) next2;
+      else
         if i = pow then
+          let next2 = E.next last2 in
+          E.display (pow+i+1) next2;
           find_loop last2 next2 1 (pow lsl 1)
         else
+          let next2 = E.next_impure last2 in
+          E.display (pow+i+1) next2;
           find_loop last1 next2 (succ i) pow
+        (* let next2 = E.next last2 in
+         * E.display (pow+i+1) next2;
+         * if i = pow then
+         *   find_loop last2 next2 1 (pow lsl 1)
+         * else
+         *   find_loop last1 next2 (succ i) pow *)
                     
   let rec find_kth x1 k =
     if k <= 1 then x1 else find_kth (E.next_impure x1) (k-1)
 
-  (* Find the entry of loop by starting with i such that e=A(i)=A(2i) *)
-  (* and searching the smallest k with x = A(k) = A(i+k)              *)
-  (* to return k and x                                                *)
+  (* Find the entry of loop by starting with i=1 s.t. e=A(i)=A(i+c) *)
+  (* to return i                                                    *)
   let rec find_loop_entry last1 last2 i =
     if E.equal last1 last2 then (i, last1)
     else
@@ -333,9 +340,8 @@ module RestartableBrent (E:ExprType) = struct
     state.funcall <- FindKth { x1; k };
     if k <= 1 then x1 else find_kth (E.next x1) (k-1)
 
-  (* Find the entry of loop by starting with i such that e=A(i)=A(2i) *)
-  (* and searching the smallest k with x = A(k) = A(i+k)              *)
-  (* to return k and x                                                *)
+  (* Find the entry of loop by starting with i=1 s.t. e=A(i)=A(i+c) *)
+  (* to return i                                                    *)
   let rec find_loop_entry last1 last2 i =
     state.funcall <- FindLoopEntry { last1; last2; i };
     if E.equal last1 last2 then (i, last1)
@@ -416,6 +422,70 @@ module RestartableBrent (E:ExprType) = struct
               funcall state.elapsed opt_r;
       exit 0
 end
+
+(* Improved Brent's algorithm *)
+(* Storing the expression at the previous power
+   for finding the entry point of the cycler earlier *)
+module Brent (E:ExprType) = struct
+
+  (* Find loop by Brent's cycle-finding algorithm                    *)
+  (* to return k and pow such that A(pow=2**n) = A(pow+k) (1<=k<pow),*)
+  (* and A(pow/2)                                                    *)
+  let rec find_loop last1 last2 i pow ppow_exp =
+    if pow > E.limit then begin
+      if E.limit > 1 then
+        eprintf "%d terms are all different.@." (pow+i);
+      exit 0
+    end else
+      if E.equal last1 last2 then (i,pow,ppow_exp)
+      else 
+        if i = pow then
+          let next2 = E.next last2 in
+          E.display (pow+i+1) next2;
+          find_loop last2 next2 1 (pow lsl 1) last1
+        else
+          let next2 = E.next_impure last2 in
+          E.display (pow+i+1) next2;
+          find_loop last1 next2 (succ i) pow ppow_exp
+                    
+  let rec find_kth x1 k =
+    if k <= 1 then x1 else find_kth (E.next_impure x1) (k-1)
+
+  (* Find the entry of loop by starting with i=1 s.t. e=A(i)=A(i+c) *)
+  (* to return i                                                    *)
+  let rec find_loop_entry last1 last2 i =
+    if E.equal last1 last2 then (i, last1)
+    else
+      let next1 = E.next_impure last1 in
+      let next2 = E.next_impure last2 in
+      E.display (succ i) next1;
+      find_loop_entry next1 next2 (succ i)
+
+  let find_cycle init =
+    E.display 1 init;
+    let next = E.next init in
+    E.display 2 next;
+    (* Find (the smallest) c and 2**i e s.t. e = A(2**i) = A(2**i+c)
+       with smallest i *)
+    let loop_size, pow, ppow_exp =
+      find_loop (E.copy init) next 1 1 (E.copy init) in
+    printf "Loop detected! (%d = %d [%d])@." (pow+loop_size) pow loop_size;
+    (* Compute A(2**j+c) with maximum j s.t. 2**j+c < 2**i *)
+    let ppow = pow lsr 1 in
+    let k, x =
+      if loop_size < ppow then
+        find_loop_entry ppow_exp
+          (find_kth (E.copy ppow_exp) (succ loop_size)) ppow
+      else
+        find_loop_entry init
+          (find_kth (E.next_impure ppow_exp) (loop_size-ppow+1)) 1 in
+    (* Find (the smallest) k(>=i/2) and x s.t. x = A(k) = A(k+c) *)
+    (* let k, x = find_loop_entry exp_prev e ppow in *)
+    printf "Loop entry found at %d!@." k;
+    k, loop_size, x
+
+end
+
 
 module Gosper(E:ExprType) = struct
   type t = E.t
