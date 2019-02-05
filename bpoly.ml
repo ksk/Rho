@@ -288,9 +288,9 @@ let speclist = make_speclist [
                      | "ZS" -> (module ZBitSeq)
                      | "ZB" -> (module ZBytes)
                      | "PB" -> (module PureBytes)
-                     | "P2" -> (module PureBytes2)
                      | "IB" -> (module ImpureBytes)
-                     | "I2" -> (module ImpureBytes2)
+                     | "RL" -> (module RevList)
+                     | "LL" -> (module LevelList)
                      | _ -> raise (Arg.Bad "Unknown internal representation mode"): Expr) in
                      bexpr := (module B)),
   "Select internal representation of decreasing polynomials (ZS|ZB|PB|IB";
