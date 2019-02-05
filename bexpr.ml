@@ -140,7 +140,7 @@ module ImpureBytes: Expr = struct
   let list_of_expr {bytes;from;upto} =
     let rec loop i acc =
       if i > upto then acc
-      else loop (i+1) (repeat (cons i) (bytes$!!i) acc) in
+      else loop (i+1) (repeat (cons (i-from)) (bytes$!!i) acc) in
     loop from []
 
   let rev_list_of_expr expr = List.rev(list_of_expr expr)
