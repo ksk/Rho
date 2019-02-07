@@ -252,43 +252,46 @@ let rho_check init e =
 let rho_check_floyd init e =
   let e = normalize e in
   let init = normalize init in
-  let module R = (Floyd (struct
-                           type t = expr
-                           let limit = !limit
-                           let next x = normalize_app x e
-                           let next_impure x = next x
-                           let copy x = x
-                           let equal = (=)
-                           let display = print_state
-                         end)) in
+  let module R =
+    (Floyd (struct
+         type t = expr
+         let limit = !limit
+         let next x = normalize_app x e
+         let next_impure x = next x
+         let copy x = x
+         let equal = (=)
+         let display = print_state
+       end)) in
   R.find_cycle init
-
+  
 let rho_check_brent init e =
   let e = normalize e in
   let init = normalize init in
-  let module R = (Brent (struct
-                           type t = expr
-                           let limit = !limit
-                           let next x = normalize_app x e
-                           let next_impure x = next x
-                           let copy x = x
-                           let equal = (=)
-                           let display = print_state
-                         end)) in
+  let module R =
+    (ImprovedBrent (struct
+         type t = expr
+         let limit = !limit
+         let next x = normalize_app x e
+         let next_impure x = next x
+         let copy x = x
+         let equal = (=)
+         let display = print_state
+       end)) in
   R.find_cycle init
 
 let rho_check_gosper init e =
   let e = normalize e in
   let init = normalize init in
-  let module R = (Gosper (struct
-                           type t = expr
-                           let limit = !limit
-                           let next x = normalize_app x e
-                           let next_impure x = next x
-                           let copy x = x
-                           let equal = (=)
-                           let display = print_state
-                         end)) in
+  let module R =
+    (Gosper (struct
+         type t = expr
+         let limit = !limit
+         let next x = normalize_app x e
+         let next_impure x = next x
+         let copy x = x
+         let equal = (=)
+         let display = print_state
+       end)) in
   R.find_cycle init
 
 let church n =

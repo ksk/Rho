@@ -5,7 +5,7 @@ open Bexpr
 
 let limit = ref 65535
 type howshow = Sum | Length | Height | Depth | BarChart
-type algo = Naive | Floyd | Brent | Gosper
+type algo = Naive | Floyd | Brent | Gosper | Gosper2
 type store = Map | Hashtbl
 type display = Quiet | Verbose | Every of int | Show of howshow list
 
@@ -138,7 +138,7 @@ module MakeMain(B:Expr) = struct
       else
         (fun e -> B.apply e expr) in
     let module R =
-      (Brent (struct
+      (ImprovedBrent (struct
            type t = B.t
            let limit = !limit
            let next_impure = next_impure
@@ -158,6 +158,25 @@ module MakeMain(B:Expr) = struct
         (fun e -> B.apply e expr) in
     let module R =
       (Gosper (struct
+           type t = B.t
+           let limit = !limit
+           let next_impure = next_impure
+           let next e = next_impure (B.copy e)
+           let copy x = B.copy x
+           let equal = B.equal
+           let display = show_status !display
+         end)) in
+    R.find_cycle expr
+
+  let rho_check_gosper2 expr =
+    let next_impure =
+      if expr_length expr = 1 then
+        let h = expr_height expr-1 in
+        (fun e -> B.apply_mono e h)
+      else
+        (fun e -> B.apply e expr) in
+    let module R =
+      (ImprovedGosper (struct
            type t = B.t
            let limit = !limit
            let next_impure = next_impure
@@ -195,17 +214,7 @@ module MakeMain(B:Expr) = struct
     R.find_cycle_restart expr fname
     
   let rho_check_restart_gosper expr fname =
-    let module R =
-      (RestartableGosper (struct
-           type t = B.t
-           let limit = !limit
-           let next e = B.apply (B.copy e) expr
-           let next_impure x = next x
-           let copy x = B.copy x
-           let equal = (=)
-           let display = show_status !display
-         end)) in
-    R.find_cycle_restart expr fname
+    failwith "Restartable Gosper's algorithm is not implemented yet."
 
   let rho_check expr = match !algo with
     | Naive ->
@@ -229,16 +238,24 @@ module MakeMain(B:Expr) = struct
                 show_algo "Restartable (Brent)";
                 rho_check_restart_brent expr fname end
     | Gosper ->
-       match !restart_file with
+       begin match !restart_file with
              | None ->
                 show_algo "Gosper";
                 rho_check_gosper expr
              | Some fname ->
                 eprintf "Restartable (Gosper): not implemented yet@.";
-                exit 1
+                exit 1 end
                 (*
                   show_algo "Restartable (Gosper)";
                   rho_check_restart_gosper expr fname *)
+    | Gosper2 ->
+       match !restart_file with
+             | None ->
+                show_algo "Gosper2";
+                rho_check_gosper2 expr
+             | Some fname ->
+                eprintf "Restartable (Gosper): not implemented yet@.";
+                exit 1
 
   let main () =
     (* Arg.parse speclist anon_fun usage_msg; *)
@@ -299,9 +316,11 @@ let speclist = make_speclist [
   "Use Floyd's cycle-finding algorithm";
   ["-b";"-brent"], Arg.Unit(fun () -> algo := Brent),
   "Use Brent's cycle-finding algorithm";
-
   ["-g";"-gosper"], Arg.Unit(fun () -> algo := Gosper),
   "Use Gosper's cycle-finding algorithm";
+  ["-g2";"-gosper2"], Arg.Unit(fun () -> algo := Gosper2),
+  "Use Improved Gosper's cycle-finding algorithm (efficient for very late cycles)";
+
   ["-r";"-restart"], Arg.String(fun s ->
                                 if !algo = Naive then algo := Floyd;
                                 restart_file := Some s),

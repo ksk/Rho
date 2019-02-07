@@ -25,6 +25,17 @@ end
 
 type restart = RBrent | RFloyd | RGosper
 
+(* counting trailing zeros, used by Gosper's algorithm *)
+let ctz x =
+  let n = 0 in
+  let n, x = if x land 0xffffffff = 0 then n + 32, x lsr 32 else n, x in
+  let n, x = if x land 0xffff = 0 then n + 16, x lsr 16 else n, x in
+  let n, x = if x land 0xff = 0 then n + 8, x lsr 8 else n, x in
+  let n, x = if x land 0xf = 0 then n + 4, x lsr 4 else n, x in
+  let n, x = if x land 0x3 = 0 then n + 2, x lsr 2 else n, x in
+  if x land 0x1 = 0 then n + 1 else n
+
+
 module Naive (E:ExprType) (S:StoreType with type t = E.t) = struct
   type t = E.t
   let find_cycle init =
@@ -226,7 +237,7 @@ end
 *)
 
 (* Brent's algorithm *)
-module SimpleBrent (E:ExprType) = struct
+module Brent (E:ExprType) = struct
   type t = E.t
 
   (* Find loop by Brent's cycle-finding algorithm                    *)
@@ -426,7 +437,7 @@ end
 (* Improved Brent's algorithm *)
 (* Storing the expression at the previous power
    for finding the entry point of the cycler earlier *)
-module Brent (E:ExprType) = struct
+module ImprovedBrent (E:ExprType) = struct
 
   (* Find loop by Brent's cycle-finding algorithm                    *)
   (* to return k and pow such that A(pow=2**n) = A(pow+k) (1<=k<pow),*)
@@ -498,16 +509,6 @@ module Gosper(E:ExprType) = struct
   (*       M(17) = { 7, 11, 13, 15, 16 } *)
   (* The set { A(m) | m in M(n) } for each n is maintained. *)
 
-  (* counting trailing zeros *)
-  let ctz x =
-    let n = 0 in
-    let n, x = if x land 0xffffffff = 0 then n + 32, x lsr 32 else n, x in
-    let n, x = if x land 0xffff = 0 then n + 16, x lsr 16 else n, x in
-    let n, x = if x land 0xff = 0 then n + 8, x lsr 8 else n, x in
-    let n, x = if x land 0xf = 0 then n + 4, x lsr 4 else n, x in
-    let n, x = if x land 0x3 = 0 then n + 2, x lsr 2 else n, x in
-    if x land 0x1 = 0 then n + 1 else n
-  
   let rec find_loop aset last i k =
     if i > E.limit then begin
       if E.limit > 1 then
@@ -551,53 +552,81 @@ module Gosper(E:ExprType) = struct
 
 end
 
-module RestartableGosper(E:ExprType) = struct
+module ImprovedGosper(E:ExprType) = struct
   type t = E.t
+  (* To find A(n) = A(r) with n <> r *) 
 
-  type funcall =
-    | Init
-    | FindLoop of { last1: t; last2: t; i: int; pow: int }
-    | FindKth of { x1: t; k: int }
-    | FindLoopEntry of { last1: t; last2: t; i: int }
+  (* Nu2(r) = k such that r = d * 2^k with some odd d. *)
+  (* M(n) = { u < n | u = max { r | Nu2(r+1) = k } for some k < log_2 n } *)
+  (* E.g., M(15) = { 7, 11, 13, 14 }     *)
+  (*       M(16) = { 7, 11, 13, 14, 15 } *)
+  (*       M(17) = { 7, 11, 13, 15, 16 } *)
+  (* The set { A(m) | m in M(n) } for each n is maintained. *)
 
-  type state = { mutable init: t option;
-                 mutable find_loop: (int * int) option;
-                 mutable find_kth: t option;
-                 mutable funcall: funcall;
-                 mutable elapsed: float; }
+  let log2max = 64
 
-  exception Interrupted of state
+  type bimap = { aset: t array; htbl: (t, int) Hashtbl.t }
+  let add r t {aset;htbl} =
+    Hashtbl.remove htbl aset.(r);
+    aset.(r) <- t;
+    Hashtbl.add htbl t r
 
-  let state = { init = None;
-                find_loop = None;
-                find_kth = None;
-                funcall = Init;
-                elapsed = 0.  }
-  let stime = ref (Unix.gettimeofday()) (* start time *)
-  let rfile = ref ""      (* the file name for restarting *)
+  (* maximum m such that ctz m = j and m < k *)
+  let prev_ctz j k =
+    let j1 = 1 lsl j in
+    let k = k - 1 in
+    k land (lnot (j1 - 1)) - (lnot k) land  j1
+  
+  let rec find_loop bimap last i k =
+    if i > E.limit then begin
+      if E.limit > 1 then
+        eprintf "%d terms are all different.@." (2 * E.limit);
+      exit 0
+    end else
+      let next = E.next_impure last in
+      E.display i last;
+      match Hashtbl.find_opt bimap.htbl next with
+      | None ->
+         let r = ctz i in
+         add r (E.copy next) bimap;
+         find_loop bimap next (succ i) (if r = k then succ k else k)
+      | Some j ->
+         let n = prev_ctz j i in
+         (* let j1 = 1 lsl j in
+          * let i1 = i - 1 in
+          * let n = i1 land (lnot (j1 - 1)) - (lnot i1) land  j1 in *)
+         i - n, n
 
-  let save_current_state state =
-    let elapsed = state.elapsed +. Unix.gettimeofday() -. !stime in
-    state.elapsed <- elapsed;
-    let oc = open_out !rfile in
-    output_value oc (RBrent, state);
-    close_out oc
-
-  (* Find loop by Brent's cycle-finding algorithm                    *)
-  (* to return k and pow such that A(pow=2**n) = A(pow+k) (1<=k<pow) *)
-  let rec find_loop a set last =
-    failwith"RestartableGosper.find_loop"
-
-  (* Find the entry of loop by starting with i such that e=A(i)=A(2i) *)
-  (* and searching the smallest k with x = A(k) = A(i+k)              *)
-  (* to return k and x                                                *)
   let rec find_loop_entry last1 last2 i =
-    failwith"RestartableGosper.find_loop_entry"
+    E.display i last1;
+    if E.equal last1 last2 then i, last1
+    else find_loop_entry
+           (E.next_impure last1) (E.next_impure last2) (succ i)
 
-  let find_cycle_restart init fname =
-    failwith"RestartableGosper.find_loop_restart"
-    (* generate a filename if specifying no fileneme *)
-         
+  let rec find_kth x1 k =
+    if k <= 1 then x1 else find_kth (E.next_impure x1) (k-1)
+
+  let find_cycle init =
+    let bimap = { aset = Array.make log2max init;
+                  htbl = Hashtbl.create log2max } in
+    let loop_size, i = find_loop bimap (E.copy init) 1 1 in
+    printf "Loop detected! (%d = %d [%d])@." (i+loop_size) i loop_size;
+    (* let e = move_until_loop_size loop_size (E.copy init) in *)
+    let ub = i + loop_size in
+    (* search latest stored point before loop_size+1 
+       and find the loopsize-th  *) 
+    let rec find_loopsize_th j ubhf mk aset_mj =
+      if 0 < ubhf then 
+        find_kth (E.next_impure aset_mj) (loop_size-mk)
+      else
+        let k = prev_ctz j ub in
+        if k < loop_size && mk < k then
+          find_loopsize_th (succ j) (ubhf lsr 1) k bimap.aset.(j)
+        else 
+          find_loopsize_th (succ j) (ubhf lsr 1) mk aset_mj in
+    let e = find_loopsize_th 0 ub 0 (E.copy init) in
+    let k, x = find_loop_entry init e 1 in
+    printf "Loop entry found at %d!@." k;
+    k, loop_size, x
+
 end
-
-    
