@@ -38,7 +38,7 @@ let (|<-) (x: int -> unit) = x [@@inline]
 (* decreasing polynomial representation in string *)
 (* n-th character denotes the number of 'n' in the list representation *)
 (* "\001\002\002\000\000\001" for 5.2.2.1.1.0 *)
-module PureBytes: Expr = struct
+module NonReuseBytes: Expr = struct
   type t = Bytes.t
 
   let compare = compare
@@ -101,9 +101,9 @@ module PureBytes: Expr = struct
     let expr1 = insert_left expr1 (len2+zero1) left2 in
     let rec insert_rest j =
       if j >= 0 then begin
-          insert_one expr1 (zero1 + j) (expr2 $!! j);
-          insert_rest (j-1)
-        end in
+        insert_one expr1 (zero1 + j) (expr2 $!! j);
+        insert_rest (j-1)
+      end in
     insert_rest (len2-2);
     expr1
 
@@ -119,7 +119,7 @@ end
 (* "\000\000\000\001\002\002\000\000\001\000\000"
    for 5.2.2.1.1.0 when from = 3 (offset) *)
 (* from and upto are maintained for updates *)
-module ImpureBytes: Expr = struct
+module ReuseBytes: Expr = struct
   type t = { bytes: Bytes.t; from: int; upto: int }
 
   (* let pp_expr wid prf {bytes;from;upto} =
@@ -209,6 +209,11 @@ module ImpureBytes: Expr = struct
     | neq -> neq
 
   let equal e1 e2 = compare e1 e2 = 0
+
+  (* let equal e1 e2 =
+    let b = equal e1 e2 in
+    if b then Format.printf "b_max = %d@." (Bytes.length e1.bytes);
+    b *)
 
 end 
 

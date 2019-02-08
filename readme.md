@@ -54,7 +54,6 @@ B<sup>m<sub>1</sub></sup> B o
 B<sup>m<sub>2</sub></sup> B o ... o
 B<sup>m<sub>k</sub></sup> B,
 with m<sub>1</sub> &ge; m<sub>2</sub> &ge;...&ge; m<sub>k</sub> &ge; 0.
-This command also uses Floyd's cycle-finding algorithm.
 To check the &rho;-property of B<sup>2</sup> B,
 run
 ```
@@ -70,9 +69,9 @@ run
 $ bpoly 1 1 1 0 0 0
 ```
 which does not terminate up to the given limit of repetition (65535 by default)
-because it does not have the &rho;-property.
+because it does not have the &rho;-property as shown our paper [&#91;1&#93;](#fscd18).
 Command line options similar to those of `rho` are available.
-It is better to add the `-f` option for larger n so as to use Floyd's algorithm.
+It is better to add the `-f` or `-b` option for larger n so as to use Floyd's or Brent's cycle-finding algorithm.
 Run
 ```
 $ bpoly -h
@@ -86,4 +85,9 @@ Keisuke Nakano conjectured in 2008 that
 
 > a B-term has the &rho;-property if and only if it is equivalent to B<sup>n</sup> B with some n.
 
-in which if-part and only-if-part are both still open.
+in which if-part and only-if-part are both still open [&#91;2&#93;](#trs08).
+
+---
+<a name="fscd18">&#91;1&#93;</a>Mirai Ikebuchi and Keisuke Nakano. On repetitive right application of B-terms, _In the proceedings of the 3rd International Conference on Formal Structures for Computation and Deduction (FSCD 2018)_, pp.18:1-18:15, Oxford, UK, July 2018.
+
+<a name="trs08">&#91;2&#93;</a>Keisuke Nakano. &rho;-property of combinators, _29th TRS Meeting_, Tokyo, 2008.

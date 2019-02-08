@@ -12,7 +12,7 @@ type display = Quiet | Verbose | Every of int | Show of howshow list
 let restart_file : string option ref = ref None
 let algo = ref Naive
 let store = ref Hashtbl
-let bexpr = ref (module PureBytes: Expr)
+let bexpr = ref (module LevelList: Expr)
 let display = ref Verbose
 let blist = ref []
 let wid = ref 1
@@ -298,19 +298,30 @@ let speclist = make_speclist [
   ["-mm";"-map"], Arg.Unit(fun () -> store := Map),
   "Use the Map module to store the history (in naive cycle detection)";
 
-  ["-E";"-exp"], Arg.String(fun e ->
-                     let module B = (val match e with
-                     | "IS" -> (module IntBitSeq) (* DO NOT USE *)
-                     | "DS" -> (module DIntBitSeq)
-                     | "ZS" -> (module ZBitSeq)
-                     | "ZB" -> (module ZBytes)
-                     | "PB" -> (module PureBytes)
-                     | "IB" -> (module ImpureBytes)
-                     | "RL" -> (module RevList)
-                     | "LL" -> (module LevelList)
-                     | _ -> raise (Arg.Bad "Unknown internal representation mode"): Expr) in
-                     bexpr := (module B)),
-  "Select internal representation of decreasing polynomials (ZS|ZB|PB|IB";
+  ["-x";"-extreamly-easy-run"],
+  Arg.Unit(fun () ->
+      display := Quiet;
+      algo := Brent;
+      limit := Pervasives.max_int-1;
+      bexpr := (module ReuseBytes)),
+  "Easy run mode for monomial cases equivalent to -q -u -b -E IB";
+
+  ["-E"], Arg.String(function
+              | "LL" -> bexpr := (module LevelList)
+              | "BL" -> bexpr := (module NonReuseBytes)
+              | "RB" -> bexpr := (module ReuseBytes)
+              | "ZB" -> bexpr := (module ZBytes)
+              | "RL" -> bexpr := (module RevList)
+              | "ZS" -> bexpr := (module ZBitSeq)
+              | "IS" -> bexpr := (module IntBitSeq)  (* DO NOT USE *)
+              | "DS" -> bexpr := (module DIntBitSeq) (* DO NOT USE *)
+              | _ -> raise (Arg.Bad "Unknown internal representation mode")),
+  "Select internal representation of decreasing polynomials (LL|PB|IB|ZB|ZS)\n"^
+  "\tLL (default): List of the numbers of the same level for respective levels where all numbers <= 2^62-1 (e.g., [1;0;3] stands for 2.2.2.0)\n"^
+  "\tBL: Byte string implementation of LL where all nubmers <= 255\n"^
+  "\tRB: Reuse-as-much-as-possible version of BL\n"^
+  "\tRL: Reversed list (e.g., [0;2;2;2] for 2.2.2.0)\n"^
+  "\tZS: Binary notation as a composition of 0 (\\x.Bx) and 1 (\\x.BxB)";
 
   ["-f";"-floyd"], Arg.Unit(fun () -> algo := Floyd),
   "Use Floyd's cycle-finding algorithm";
