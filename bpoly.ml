@@ -284,75 +284,88 @@ let add_display hs = match !display with
   | Show l -> display := Show (hs::l)
   | _ -> display := Show [hs]
 
+let abort_unless_int63 () =
+  if (-1) lsr 1 + 1 <> 1 lsl 62 then
+    failwith"This mode assumes 63-bit int."
+
 let speclist = make_speclist [
   ["-n"], Arg.Set_int limit,
   "Limit number of self applications (default = "^string_of_int !limit^")";
-  ["-u";"-unbound"], Arg.Unit(fun () -> limit := Pervasives.max_int-1),
+  ["-u" (*;"-unbound"*)], Arg.Unit(fun () -> limit := Pervasives.max_int-1),
   "Keep on trying self applications unless the rho-property is found";
 
-  ["-q";"-quiet"], Arg.Unit(fun () -> display := Quiet),
+  ["-q" (*;"-quiet"*)], Arg.Unit(fun () -> display := Quiet),
   "Quiet mode";
   ["-e";"-every"], Arg.Int(fun i -> display := Every i),
   "Display only status every n";
 
-  ["-mm";"-map"], Arg.Unit(fun () -> store := Map),
+  ["-m"(*;"-map"*)], Arg.Unit(fun () -> store := Map),
   "Use the Map module to store the history (in naive cycle detection)";
 
-  ["-x";"-extreamly-easy-run"],
+  ["-x" (*;"-extreamly-easy-run"*)],
   Arg.Unit(fun () ->
       display := Quiet;
       algo := Brent;
       limit := Pervasives.max_int-1;
       bexpr := (module ReuseBytes)),
-  "Easy run mode for monomial cases equivalent to -q -u -b -E IB";
+  "Easy run mode for monomial cases equivalent to -q -u -b -E RB";
 
   ["-E"], Arg.String(function
               | "LL" -> bexpr := (module LevelList)
               | "BL" -> bexpr := (module NonReuseBytes)
               | "RB" -> bexpr := (module ReuseBytes)
+              | "RE" -> bexpr := (module ReuseBytesExtensible)
               | "ZB" -> bexpr := (module ZBytes)
               | "RL" -> bexpr := (module RevList)
-              | "ZS" -> bexpr := (module ZBitSeq)
-              | "IS" -> bexpr := (module IntBitSeq)  (* DO NOT USE *)
-              | "DS" -> bexpr := (module DIntBitSeq) (* DO NOT USE *)
+              | "ZS" -> bexpr := (module MakeBitSeq(ZBits))
+              | "LS" -> abort_unless_int63 ();
+                        bexpr := (module MakeBitSeq(LBits))
+              | "IS" -> (* NOT RECOMMENDED *)
+                        bexpr := (module MakeBitSeq(IntBits))  
+              | "DS" -> (* NOT RECOMMENDED *)
+                        abort_unless_int63 ();
+                        bexpr := (module MakeBitSeq(DIntBits))
+              | "TS" -> (* NOT RECOMMENDED *)
+                        abort_unless_int63 ();
+                        bexpr := (module MakeBitSeq(TIntBits))
               | _ -> raise (Arg.Bad "Unknown internal representation mode")),
-  "Select internal representation of decreasing polynomials (LL|PB|IB|ZB|ZS)\n"^
-  "\tLL (default): List of the numbers of the same level for respective levels where all numbers <= 2^62-1 (e.g., [1;0;3] stands for 2.2.2.0)\n"^
+  "Select internal representation of decreasing polynomials (LL|BL|RB|RL|ZS)\n"^
+  "\t\tLL (default): List of the numbers of the same level for respective levels where all numbers <= 2^62-1 (e.g., [1;0;3] stands for 2.2.2.0)\n"^
   "\tBL: Byte string implementation of LL where all nubmers <= 255\n"^
   "\tRB: Reuse-as-much-as-possible version of BL\n"^
   "\tRL: Reversed list (e.g., [0;2;2;2] for 2.2.2.0)\n"^
   "\tZS: Binary notation as a composition of 0 (\\x.Bx) and 1 (\\x.BxB)";
 
-  ["-f";"-floyd"], Arg.Unit(fun () -> algo := Floyd),
+  ["-f";"--floyd"], Arg.Unit(fun () -> algo := Floyd),
   "Use Floyd's cycle-finding algorithm";
-  ["-b";"-brent"], Arg.Unit(fun () -> algo := Brent),
+  ["-b";"--brent"], Arg.Unit(fun () -> algo := Brent),
   "Use Brent's cycle-finding algorithm";
-  ["-g";"-gosper"], Arg.Unit(fun () -> algo := Gosper),
+  ["-g";"--gosper"], Arg.Unit(fun () -> algo := Gosper),
   "Use Gosper's cycle-finding algorithm";
-  ["-g2";"-gosper2"], Arg.Unit(fun () -> algo := Gosper2),
+  ["-g2"(*;"-gosper2"*)], Arg.Unit(fun () -> algo := Gosper2),
   "Use Improved Gosper's cycle-finding algorithm (efficient for very late cycles)";
 
-  ["-r";"-restart"], Arg.String(fun s ->
+  ["-r";"--restart"], Arg.String(fun s ->
                                 if !algo = Naive then algo := Floyd;
                                 restart_file := Some s),
   "Running with restartable mode (default: Floyd's cycle-finding algorithm)";
-  ["-R";"-restart-auto"], Arg.Unit(fun () ->
+  ["-R";"--restart-auto"], Arg.Unit(fun () ->
                                    if !algo = Naive then algo := Floyd;
                                    restart_file := Some ""),
   "Similar to '-r' but with specifying no filename";
  
-  ["-w";"-width"], Arg.Set_int wid,
+  ["-w"(*;"-width"*)], Arg.Set_int wid,
   "Display each digit in the width";
 
-  ["-S";"-sum"], Arg.Unit(fun () -> add_display Sum),
+  ["-S";"--sum"], Arg.Unit(fun () -> add_display Sum),
   "Display its sum";
-  ["-L";"-length"], Arg.Unit(fun () -> add_display Length),
+  ["-L";"--length"], Arg.Unit(fun () -> add_display Length),
   "Display its length";
-  ["-H";"-height"], Arg.Unit(fun () -> add_display Height),
+  ["-H";"--height"], Arg.Unit(fun () -> add_display Height),
   "Display its height";
-  ["-D";"-depth"], Arg.Unit(fun () -> add_display Depth),
+  ["-D";"--depth"], Arg.Unit(fun () -> add_display Depth),
   "Display its depth";
-  ["-B";"-bar-chart"], Arg.Unit(fun () -> add_display BarChart),
+  ["-B";"--bar-chart"], Arg.Unit(fun () -> add_display BarChart),
   "Display as bar chart like histogram the further step of shrink potential";
 
 ]

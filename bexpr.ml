@@ -1,5 +1,7 @@
 open Format
 
+let failwithf fmt = ksprintf (fun s () -> failwith s) fmt
+
 module type Expr = sig
   type t
   val compare: t -> t -> int
@@ -119,7 +121,7 @@ end
 (* "\000\000\000\001\002\002\000\000\001\000\000"
    for 5.2.2.1.1.0 when from = 3 (offset) *)
 (* from and upto are maintained for updates *)
-module ReuseBytes: Expr = struct
+module ReuseBytesExtensible: Expr = struct
   type t = { bytes: Bytes.t; from: int; upto: int }
 
   (* let pp_expr wid prf {bytes;from;upto} =
@@ -155,7 +157,7 @@ module ReuseBytes: Expr = struct
     
   let hash e = Hashtbl.hash (list_of_expr e)
 
-  let insert_one ({bytes;from;upto} as expr) b num =
+  let insert_bar ({bytes;from;upto} as expr) b num =
     let rec loop i b =
       if upto < i then
         let b_max = Bytes.length bytes in
@@ -178,7 +180,7 @@ module ReuseBytes: Expr = struct
           { bytes=bs; from = 0; upto=b }
       else if b = i then begin
         bytes $|i|<- num + (bytes $!! i);
-        { expr with from }
+        { expr with bytes }
       end else
         loop (succ i) (b + (bytes $!! i)) in
     if num > 0 then loop from (b+from) else expr
@@ -189,13 +191,13 @@ module ReuseBytes: Expr = struct
     let f1 = succ f1 in
     let rec loop e1 u2 =
       if u2 < f2 then e1
-      else loop (insert_one e1 (base+u2-f2) (b2 $!! u2)) (u2-1) in
+      else loop (insert_bar e1 (base+u2-f2) (b2 $!! u2)) (u2-1) in
     loop {bytes=b1;from=f1;upto=u1} u2
 
   let apply_mono {bytes;from;upto} h =
     let base = bytes$!! from in
     bytes $|from|<- 0;
-    insert_one {bytes; from = succ from; upto} (h+base) 1
+    insert_bar {bytes; from = succ from; upto} (h+base) 1
 
   let compare {bytes=b1;from=f1;upto=u1} {bytes=b2;from=f2;upto=u2} =
     match compare (u1-f1) (u2-f2) with
@@ -216,6 +218,132 @@ module ReuseBytes: Expr = struct
     b *)
 
 end 
+
+module ReuseBytes: Expr = struct
+  type t = { bytes: Bytes.t; from: int; upto: int }
+
+  let pp_expr prf {bytes;from;upto} =
+    fprintf prf " %S[%d..%d]" (Bytes.to_string bytes) from upto
+
+  let b_size  = 512 (* Size of byte sequence *)
+  let max_idx = 256 (* maximum lowest index 't.from' of active bytes *)
+
+  let copy {bytes;from;upto} =
+    {bytes=Bytes.copy bytes;from;upto}
+
+  let bytes_of_expr {bytes;from;upto} e =
+    let len = upto-from+1 in
+    let b = Bytes.make len '\000' in
+    Bytes.blit bytes from b 0 len;
+    b
+    
+  let list_of_expr {bytes;from;upto} =
+    let rec loop i acc =
+      if i > upto then acc
+      else loop (i+1) (repeat (cons (i-from)) (bytes$!!i) acc) in
+    loop from []
+
+  let rev_list_of_expr expr = List.rev(list_of_expr expr)
+    
+  let expr_of_list list =
+    match valid_or_abort list with
+    | [] -> invalid_arg "expr_of_list"
+    | n::_ ->
+       let bytes = Bytes.make b_size '\000' in
+       List.iter (fun n -> bytes $|n|<- succ(bytes $!! n)) list;
+       {bytes; from=0; upto=n}
+    
+  let hash e = Hashtbl.hash (list_of_expr e)
+
+  let insert_bar expr b num =
+    let {bytes;from;upto} =
+      if expr.from < max_idx then expr
+      else
+        let {bytes;from;upto} = expr in
+        (* byte array boundary check *)
+        if b_size <= upto then
+          failwithf"Highest level becomes more than %d."(b_size-1)();
+        Bytes.blit bytes from bytes 0 (upto-from+1);
+        for j = from to upto do bytes $|j|<- 0 done;
+        { expr with from = 0; upto = upto-from } in
+    let rec loop i b =
+      if i > upto then begin
+        bytes $|b|<- num;
+        { expr with from; upto = b }
+      end else if i = b then
+        let num = num + (bytes $!! i) in
+        bytes $|i|<- num;
+        (* byte overflow check *)
+        begin if num > 255 then
+          failwithf"The level %d occurs more than 255"(i-from)()end;
+        (* assert (255 < num); *)
+        { expr with from; upto }
+      else
+        loop (succ i) (b + (bytes $!! i)) in
+    if num > 0 then loop from (b+from) else expr
+
+  let apply {bytes=b1;from=f1;upto=u1} {bytes=b2;from=f2;upto=u2} =
+    let base = b1 $!! f1 in
+    b1 $|f1|<- 0; (* clear after checking base *)
+    let f1 = succ f1 in
+    let rec loop e1 u2 =
+      if u2 < f2 then e1
+      else loop (insert_bar e1 (base+u2-f2) (b2 $!! u2)) (u2-1) in
+    loop {bytes=b1;from=f1;upto=u1} u2
+
+  let insert_mono expr b =
+    let {bytes;from;upto} =
+      if expr.from < max_idx then expr
+      else
+        let {bytes;from;upto} = expr in
+        (* byte array boundary check *)
+        if b_size <= upto then
+          failwithf"Highest level becomes more than %d."(b_size-1)();
+        (* assert(upto < b_size);  *)
+        Bytes.blit bytes from bytes 0 (upto-from+1);
+        for j = from to upto do bytes $|j|<- 0 done;
+        { expr with from = 0; upto = upto-from } in
+    let rec loop i b =
+      if i > upto then begin
+        bytes $|b|<- 1;
+        { expr with from; upto = b }
+      end else if i = b then begin
+        let v = bytes $!! i in
+        (* byte overflow check *)
+        begin if v > 255 then
+          failwithf"The level %d occurs more than 255"(i-from)()end;
+        (* assert (v < 256);  *)
+        bytes $|i|<- succ v;
+        { expr with from; upto }
+      end else
+        loop (succ i) (b + (bytes $!! i)) in
+    loop from (b+from)
+
+  let apply_mono {bytes;from;upto} h =
+    let base = bytes$!! from in
+    bytes $|from|<- 0;
+    insert_mono {bytes; from = succ from; upto} (h+base)
+
+  let compare {bytes=b1;from=f1;upto=u1} {bytes=b2;from=f2;upto=u2} =
+    match compare (u1-f1) (u2-f2) with
+    | 0 ->
+       let rec loop i1 i2 =
+         if u1 < i1 then 0 
+         else match compare (b1 $!! i1) (b2 $!! i2) with
+              | 0 -> loop (succ i1) (succ i2)
+              | neq -> neq in
+       loop f1 f2
+    | neq -> neq
+
+  let equal e1 e2 = compare e1 e2 = 0
+
+  (* let equal e1 e2 =
+    let b = equal e1 e2 in
+    if b then Format.printf "b_size = %d@." (Bytes.length e1.bytes);
+    b *)
+
+end 
+
 
 (* Using a list of numbers of the same level *)
 (* It can deal with (>255) bars of the same level *)
@@ -487,7 +615,6 @@ module MakeBitSeq(B:Bits) = struct
 end [@@inline]
 
 module IntBits: Bits = struct
-  (* double int *)
   type t = int
   let zero = 0
   let one = 1
@@ -512,6 +639,34 @@ module DIntBits: Bits = struct
   let is_one ((x1,x2):t) = x1 = 0 && x2 = 1
 end
 
+module TIntBits: Bits = struct
+  (* triple int *)
+  type t = int * int * int (* 63 bit * 63 bit * 63 bit *)
+  let zero = (0,0,0)
+  let one = (0,0,1)
+  let (>>%) ((x1,x2,x3):t) i: t =
+    if i < 64 then
+      let j = 63-i in
+      (x1 lsr i, (x1 lsl j) lor (x2 lsr i), (x2 lsl j) lor (x3 lsr i))
+    else
+      let i = i-63 in
+      (0, x1 lsr i, (x1 lsl (63-i)) lor (x2 lsr i))
+
+  let (<<%) ((x1,x2,x3):t) i: t = 
+    if i < 64 then
+      let j = 63-i in
+      ((x1 lsl i) lor (x2 lsr j), (x2 lsl i) lor (x3 lsr j), x3 lsl i)
+    else
+      let i = i-63 in
+      ((x2 lsl i) lor (x3 lsr (63-i)), x3 lsl i, 0)
+      
+  let (|%) ((x1,x2,x3):t) ((y1,y2,y3):t) =
+    (x1 lor y1, x2 lor y2, x3 lor y3)
+
+  let is_even ((_,_,x3):t) = x3 land 1 = 0
+  let is_one (x:t) = x = one
+end
+
 module ZBits: Bits = struct
   type t = Z.t
   let zero = Z.zero
@@ -523,7 +678,54 @@ module ZBits: Bits = struct
   let is_one = Z.equal Z.one
 end
 
+(* using lists for bits *)
+module LBits: Bits = struct
+  type t = int list
 
+  let check l =
+    assert (List.hd (List.rev l) <> 0); l
+         
+  let zero: t = []
+  let one: t = [1]
+
+  let avoid_nil l = match l with [] -> zero | _ -> l
+  
+  let (>>%) (l:t) i: t =
+    let rec tail_n i l =
+      if i <= 0 then l
+      else match l with [] -> [] | _::l -> tail_n (i-1) l in
+    match tail_n (i/63) l with
+    | hd::tl ->
+       let ir = i mod 63 in
+       let rec loop l c = match l with
+         | [] -> if c = 0 then [] else [c]
+         | n::ns -> ((n lsl (63-ir)) lor c)::loop ns (n lsr ir) in
+       avoid_nil (loop tl (hd lsr ir))
+    | [] -> []
+          
+  let (<<%) (l:t) i: t =
+    let ir = i mod 63 in
+    let rec loop l c = match l with
+      | [] -> if c = 0 then [] else [c]
+      | n::ns -> ((n lsl ir) lor c)::loop ns (n lsr (63-ir)) in
+    repeat (cons 0) (i/63) (loop l 0)
+    
+  let rec (|%) (l1:t) (l2:t): t = match l1, l2 with
+    | [], l | l, [] -> l
+    | n1::ns1, n2::ns2 -> (n1 lor n2)::(ns1 |% ns2)
+
+  let is_even (l:t) = match l with
+    | n::_ -> n land 1 = 0
+    | [] -> true
+          
+  let is_one (l:t) = l = one
+
+end
+
+(*
+module TIntBitSeq = MakeBitSeq(TIntBits)
 module DIntBitSeq = MakeBitSeq(DIntBits)
 module IntBitSeq = MakeBitSeq(IntBits)
 module ZBitSeq = MakeBitSeq(ZBits)
+module LBitSeq = MakeBitSeq(LBits)
+*)
