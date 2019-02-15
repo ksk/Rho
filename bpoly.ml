@@ -227,7 +227,8 @@ let run_monomial_test () =
       each_internal_expr str m) internal_expr_alist in
   List.iter run_algo [Naive, 3; Floyd, 4; Brent, 4;
                       Gosper, 4; Gosper2, 4];
-  printf "========= All monomial tests are passed! =========@."
+  printf "All monomial tests are passed.@."
+  
 
 let string_of_int_list =
   let buf = Buffer.create 64 in
@@ -237,13 +238,14 @@ let string_of_int_list =
   Buffer.contents buf
 
 let run_polynomial_test upto =
-  let test_lss = [[0;0];[1;1;0];[3;0;0];[4;3]] in
+  let test_lss = (* test inits with uppor bound for RB *)
+    [[0;0], 500; [1;1;0], 447; [3;0;0], 499; [4;3], 422] in
   match internal_expr_alist with
   | [] -> failwith "internal_expr_alist: empty"
   | (str0, set_expr)::rest_alist ->
-     let each_ls ls =
+     let each_ls (ls,uptoRB) =
        let ls_str = string_of_int_list ls in
-       printf "Trying -E %s %s ...@." str0 ls_str;
+       printf "Computing -E %s %s ...@." str0 ls_str;
        set_expr();
        let module B = (val !bexpr: Expr) in
        let init = B.expr_of_list ls in
@@ -252,11 +254,12 @@ let run_polynomial_test upto =
          res.(i) <- B.list_of_expr e;
          if i < upto then loop (succ i) (B.apply e init) in
        loop 1 (B.copy init);
+       printf "Done.@.";
        List.iter (fun (str, set_expr) ->
          let upto = 
            match str with
            | "IS" | "DS" | "TS" -> 1
-           | "RB" -> min 444 upto
+           | "RB" -> min uptoRB upto
            | _ -> upto in
          printf "Trying -E %s %s ...@." str ls_str;
          set_expr();
@@ -264,13 +267,13 @@ let run_polynomial_test upto =
          let init = B.expr_of_list ls in
          let rec loop i e =
            if B.list_of_expr e <> res.(i) then begin
-               eprintf "Incorrect at %d!@." i; exit 1
+               eprintf "Differs from %s at %d!@." str0 i; exit 1
              end;
            if i < upto then loop (succ i) (B.apply e init) in
          loop 1 (B.copy init);
-         printf "Correct.@.") rest_alist in
+         printf "Passed.@.") rest_alist in
      List.iter each_ls test_lss;
-     printf "========= All polynomial tests are passed! =========@."
+     printf "All polynomial tests are passed.@."
 
 let rec add_spec keys spec doc speclist = match keys with
   | [] -> speclist
@@ -353,7 +356,8 @@ let speclist = make_speclist [
   "Display as bar chart like histogram the further step of shrink potential";
 
   ["-t"], Arg.Unit(fun () ->
-              run_monomial_test(); run_polynomial_test 500; exit 0),
+              run_monomial_test(); run_polynomial_test 500;
+              printf "All tests are passed!@."; exit 0),
   "Test algorithms and internal expressions";
 
   (* override to hide default help messages *)

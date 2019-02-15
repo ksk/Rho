@@ -225,8 +225,8 @@ module ReuseBytes: Expr = struct
   let pp_expr prf {bytes;from;upto} =
     fprintf prf " %S[%d..%d]" (Bytes.to_string bytes) from upto
 
-  let b_size  = 512 (* Size of byte sequence *)
   let max_idx = 256 (* maximum lowest index 't.from' of active bytes *)
+  let b_size  = max_idx lsl 1 (* Size of byte sequence *)
 
   let copy {bytes;from;upto} =
     {bytes=Bytes.copy bytes;from;upto}
@@ -267,7 +267,7 @@ module ReuseBytes: Expr = struct
       if i > upto then begin
         (* byte array boundary check *)
         if b_size <= b then
-          failwithf"Highest level becomes more than %d."(b_size-1)();
+          failwithf"Highest level becomes more than %d."(max_idx-1)();
         bytes $|b|<- num;
         { expr with from; upto = b }
       end else if i = b then

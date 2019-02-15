@@ -14,9 +14,13 @@ SRCS = store.ml cycle.ml bexpr.ml
 all: opt #rho bpoly
 opt: rho.opt bpoly.opt
 
-install: opt
+install: opt test
 	install rho.opt $(HOME)/bin/rho
 	install bpoly.opt $(HOME)/bin/bpoly
+
+# tests for bpoly and cycle finding implementation
+test: opt
+	./bpoly.opt -t
 
 rho: rho.opt; @true 
 rho.bin: store.cmo cycle.cmo rho.ml
