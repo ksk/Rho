@@ -260,14 +260,14 @@ module ReuseBytes: Expr = struct
       if expr.from < max_idx then expr
       else
         let {bytes;from;upto} = expr in
-        (* byte array boundary check *)
-        if b_size <= upto then
-          failwithf"Highest level becomes more than %d."(b_size-1)();
         Bytes.blit bytes from bytes 0 (upto-from+1);
         for j = from to upto do bytes $|j|<- 0 done;
         { expr with from = 0; upto = upto-from } in
     let rec loop i b =
       if i > upto then begin
+        (* byte array boundary check *)
+        if b_size <= b then
+          failwithf"Highest level becomes more than %d."(b_size-1)();
         bytes $|b|<- num;
         { expr with from; upto = b }
       end else if i = b then
@@ -283,10 +283,12 @@ module ReuseBytes: Expr = struct
     if num > 0 then loop from (b+from) else expr
 
   let apply {bytes=b1;from=f1;upto=u1} {bytes=b2;from=f2;upto=u2} =
+    (* printf "%a@." pp_expr {bytes=b1;from=f1;upto=u1}; *)
     let base = b1 $!! f1 in
     b1 $|f1|<- 0; (* clear after checking base *)
     let f1 = succ f1 in
     let rec loop e1 u2 =
+      (* printf "e1=%a@." pp_expr e1; *)
       if u2 < f2 then e1
       else loop (insert_bar e1 (base+u2-f2) (b2 $!! u2)) (u2-1) in
     loop {bytes=b1;from=f1;upto=u1} u2
@@ -542,6 +544,17 @@ module MakeBitSeq(B:Bits) = struct
         0 :: to_revpoly (e >>% 1) in
     to_revpoly expr
 
+  let str01 =
+    let buf = Buffer.create 64 in
+    let rec loop e l =
+      if is_one e then begin
+        List.iter (Buffer.add_char buf) ('1'::l);
+        Buffer.contents buf
+      end else begin
+        loop (e >>% 1) ((if is_even e then '0' else '1')::l)
+      end in
+    fun e -> Buffer.reset buf; loop e []
+
   let list_of_expr expr =
     List.rev (rev_list_of_expr expr)
 
@@ -576,14 +589,17 @@ module MakeBitSeq(B:Bits) = struct
 
   (* tail recursive *)
   let apply2 (exp1:t) (exp2:t): t =
+    (* printf "[%s][%s]@." (str01 exp1) (str01 exp2); *)
     let rec loop e1 e2 ofs acc =
+      (* printf "+[%s][%s]@." (str01 e1) (str01 e2); *)
       if is_even e1 then loop0 (e1 >>% 1) e2 ofs acc
       else if is_one e1 then (e2 <<% succ ofs) |% acc
       else loop (e1 >>% 1) (e2 <<% 1) ofs acc
     and loop0 e1 e2 ofs acc =
+      (* printf "-[%s0][%s]@." (str01 e1) (str01 e2); *)
       if is_even e2 then
         if is_even e1 then
-          loop0 (e1 >>% 1) (e2 <<% 1) (succ ofs) acc
+          loop0 (e1 >>% 1) (e2 >>% 1) (succ ofs) acc
         else if is_one e1 then (((e2 <<% 2) |% one) <<% ofs) |% acc
         else loop0 (e1 >>% 1) (e2 <<% 1)
                (succ ofs) ((one <<% ofs) |% acc)

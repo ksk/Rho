@@ -116,12 +116,13 @@ module MakeMain(B:Expr) = struct
     | Hashtbl -> (module MakeHashtblStore(B))
 
   let make_exprtype expr: (module ExprType with type t = B.t) =
+    let init = B.copy expr in
     let next_impure =
       if expr_length expr = 1 then
         let h = expr_height expr-1 in
         (fun e -> B.apply_mono e h) 
       else
-        (fun e -> B.apply e expr) in
+        (fun e -> B.apply e init) in
     (module (struct
               type t = B.t
               let limit = !limit
@@ -196,11 +197,13 @@ module MakeMain(B:Expr) = struct
 
 end
 
-let run_test () =
+let run_monomial_test () =
   display := Quiet;
   limit := Pervasives.max_int-1;
+  (* Known results in monomial cases *)
   let tests = [|(6,4); (32,20); (258,36); (4240,5796);
-                (191206,431453)|] in
+                (191206,431453); (766241307,234444571);
+                (2641033883877,339020201163)|] in
   let each_internal_expr str m =
     let module B = (val !bexpr: Expr) in
     let module M = MakeMain(B) in
@@ -209,8 +212,8 @@ let run_test () =
       let start, cycle, _ = M.rho_check (B.expr_of_list [i]) in
       printf "Found! (%d = %d [%d])@." (start+cycle) start cycle;
       if (start, cycle) <> tests.(i) then begin
-          eprintf "Incorrect at %d!@." i; exit 1
-        end else
+        eprintf "Incorrect at %d!@." i; exit 1
+      end else
         printf "Correct.@."
     done in
   let run_algo (a,m) =
@@ -224,7 +227,50 @@ let run_test () =
       each_internal_expr str m) internal_expr_alist in
   List.iter run_algo [Naive, 3; Floyd, 4; Brent, 4;
                       Gosper, 4; Gosper2, 4];
-  printf "========= All tests are passed! =========@."
+  printf "========= All monomial tests are passed! =========@."
+
+let string_of_int_list =
+  let buf = Buffer.create 64 in
+  fun l ->
+  Buffer.reset buf;
+  List.iter (fun i -> Buffer.add_string buf (" "^string_of_int i)) l;
+  Buffer.contents buf
+
+let run_polynomial_test upto =
+  let test_lss = [[0;0];[1;1;0];[3;0;0];[4;3]] in
+  match internal_expr_alist with
+  | [] -> failwith "internal_expr_alist: empty"
+  | (str0, set_expr)::rest_alist ->
+     let each_ls ls =
+       let ls_str = string_of_int_list ls in
+       printf "Trying -E %s %s ...@." str0 ls_str;
+       set_expr();
+       let module B = (val !bexpr: Expr) in
+       let init = B.expr_of_list ls in
+       let res = Array.make (upto+1) [] in
+       let rec loop i e =
+         res.(i) <- B.list_of_expr e;
+         if i < upto then loop (succ i) (B.apply e init) in
+       loop 1 (B.copy init);
+       List.iter (fun (str, set_expr) ->
+         let upto = 
+           match str with
+           | "IS" | "DS" | "TS" -> 1
+           | "RB" -> min 444 upto
+           | _ -> upto in
+         printf "Trying -E %s %s ...@." str ls_str;
+         set_expr();
+         let module B = (val !bexpr: Expr) in
+         let init = B.expr_of_list ls in
+         let rec loop i e =
+           if B.list_of_expr e <> res.(i) then begin
+               eprintf "Incorrect at %d!@." i; exit 1
+             end;
+           if i < upto then loop (succ i) (B.apply e init) in
+         loop 1 (B.copy init);
+         printf "Correct.@.") rest_alist in
+     List.iter each_ls test_lss;
+     printf "========= All polynomial tests are passed! =========@."
 
 let rec add_spec keys spec doc speclist = match keys with
   | [] -> speclist
@@ -306,7 +352,8 @@ let speclist = make_speclist [
   ["-B";"--bar-chart"], Arg.Unit(fun () -> add_display BarChart),
   "Display as bar chart like histogram the further step of shrink potential";
 
-  ["-t"], Arg.Unit(fun () -> run_test(); exit 0),
+  ["-t"], Arg.Unit(fun () ->
+              run_monomial_test(); run_polynomial_test 500; exit 0),
   "Test algorithms and internal expressions";
 
   (* override to hide default help messages *)

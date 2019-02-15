@@ -11,14 +11,14 @@ OCAMLOPTLIBS = unix.cmxa
 
 SRCS = store.ml cycle.ml bexpr.ml
 
-all: rho bpoly
+all: opt #rho bpoly
 opt: rho.opt bpoly.opt
 
 install: opt
 	install rho.opt $(HOME)/bin/rho
 	install bpoly.opt $(HOME)/bin/bpoly
 
-rho: rho.bin rho.opt; @true
+rho: rho.opt; @true 
 rho.bin: store.cmo cycle.cmo rho.ml
 	$(OCAMLC) -pp camlp4o $(OCAMLFLAGS) $(OCAMLLIBS) -o $@ $^
 rho.opt: store.cmx cycle.cmx rho.ml

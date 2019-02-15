@@ -484,6 +484,7 @@ module ImprovedBrent (E:ExprType) = struct
     printf "Loop detected! (%d = %d [%d])@." (pow+loop_size) pow loop_size;
     (* Compute A(2**j+c) with maximum j s.t. 2**j+c < 2**i *)
     let ppow = pow lsr 1 in
+    (* printf "-- "; E.display ppow ppow_exp; *)
     let k, x =
       if loop_size < ppow then
         find_loop_entry ppow_exp
