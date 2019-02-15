@@ -1,7 +1,11 @@
+*~
+.#*
 *.cm*
 *.bin
 *.opt
 depend
 *.o
+*.out
+*.swap
 .bbrent*
 .bfloyd*

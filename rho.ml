@@ -236,66 +236,46 @@ let print_state i e = match !display with
   | Every cycle ->
       if i mod cycle = 0 then eprintf "\r%d... %!" i
 
+let make_exprtype e: (module ExprType with type t = expr) =
+  (module (struct
+            type t = expr
+            let limit = !limit
+            let next x = normalize_app x e
+            let next_impure x = next x
+            let copy x = x
+            let hash = Hashtbl.hash
+            let equal = (=)
+            let display = print_state
+           end))
+ 
 let rho_check init e =
-  let module N = (Naive (struct
-                          type t = expr
-                          let limit = !limit
-                          let next x = normalize_app x e
-                          let next_impure x = next x
-                          let copy x = x
-                          let equal = (=)
-                          let display = print_state
-                        end) (HashtblStore)) in
-  N.find_cycle init
+  let module M = Naive((val make_exprtype e))(HashtblStore) in
+  M.find_cycle init
 
 (* Using Floyd's cycle finding algorithm *)
 let rho_check_floyd init e =
   let e = normalize e in
   let init = normalize init in
-  let module R =
-    (Floyd (struct
-         type t = expr
-         let limit = !limit
-         let next x = normalize_app x e
-         let next_impure x = next x
-         let copy x = x
-         let equal = (=)
-         let display = print_state
-       end)) in
-  R.find_cycle init
+  let module M = Floyd((val make_exprtype e)) in
+  M.find_cycle init
   
+(* Using Brent's cycle finding algorithm *)
 let rho_check_brent init e =
   let e = normalize e in
   let init = normalize init in
-  let module R =
-    (ImprovedBrent (struct
-         type t = expr
-         let limit = !limit
-         let next x = normalize_app x e
-         let next_impure x = next x
-         let copy x = x
-         let equal = (=)
-         let display = print_state
-       end)) in
-  R.find_cycle init
+  let module M = ImprovedBrent((val make_exprtype e)) in
+  M.find_cycle init
 
+(* Using Gosper's cycle finding algorithm *)
 let rho_check_gosper init e =
   let e = normalize e in
   let init = normalize init in
-  let module R =
-    (Gosper (struct
-         type t = expr
-         let limit = !limit
-         let next x = normalize_app x e
-         let next_impure x = next x
-         let copy x = x
-         let equal = (=)
-         let display = print_state
-       end)) in
-  R.find_cycle init
+  let module M = Gosper((val make_exprtype e)) in 
+  M.find_cycle init
 
 let church n =
-  let rec loop e n = if n < 1 then e else loop (App(Index 2,e)) (pred n) in
+  let rec loop e n =
+    if n < 1 then e else loop (App(Index 2,e)) (pred n) in
   Lambda(2,loop (Index 1) n)
 
 open Genlex

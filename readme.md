@@ -10,7 +10,7 @@ Two programs `rho` and `bpoly` are available here.
 
 ## Requirement and how to build
 
-OCaml (&ge; 4.03) and CamlP4 are required for building the programs.
+OCaml (&ge; 4.03), CamlP4 and [Zarith](https://github.com/ocaml/Zarith) are required for building the programs.
 Both can be built just by `make`.
 
 ## Program `rho`
@@ -50,10 +50,12 @@ for details of command line options.
 The program `bpoly` checks the &rho;-property of a B-term.
 The implementation is based on the normal form of B-terms
 in the 'decreasing polynomial' representation
-B<sup>m<sub>1</sub></sup> B o
-B<sup>m<sub>2</sub></sup> B o ... o
-B<sup>m<sub>k</sub></sup> B,
-with m<sub>1</sub> &ge; m<sub>2</sub> &ge;...&ge; m<sub>k</sub> &ge; 0.
+(B<sup>m<sub>1</sub></sup> B) o
+(B<sup>m<sub>2</sub></sup> B) o ... o
+(B<sup>m<sub>k</sub></sup> B),
+with m<sub>1</sub> &ge; m<sub>2</sub> &ge;...&ge; m<sub>k</sub> &ge; 0
+where B<sup>n</sup> stands fold n-fold composition of B,
+e.g., (B<sup>3</sup> B) stands B(B(B B)).
 To check the &rho;-property of B<sup>2</sup> B,
 run
 ```
@@ -62,11 +64,11 @@ $ bpoly 2
 which results in (B<sup>2</sup> B)<sub>294</sub> = (B<sup>2</sup> B)<sub>258</sub>
 with the history of computation over decreasing polynomials.
 To check the &rho;-property of
-B<sup>1</sup> B o B<sup>1</sup> B o B<sup>1</sup> B o
-B<sup>0</sup> B o B<sup>0</sup> B o B<sup>0</sup> B,
+(B<sup>2</sup> B) o (B<sup>2</sup> B) o (B<sup>1</sup> B) o
+(B<sup>1</sup> B) o (B<sup>0</sup> B) o (B<sup>0</sup> B),
 run
 ```
-$ bpoly 1 1 1 0 0 0
+$ bpoly 2 2 1 1 0 0
 ```
 which does not terminate up to the given limit of repetition (65535 by default)
 because it does not have the &rho;-property as shown our paper [&#91;1&#93;](#fscd18).
@@ -88,6 +90,6 @@ Keisuke Nakano conjectured in 2008 that
 in which if-part and only-if-part are both still open [&#91;2&#93;](#trs08).
 
 ---
-<a name="fscd18">&#91;1&#93;</a>Mirai Ikebuchi and Keisuke Nakano. On repetitive right application of B-terms, _In the proceedings of the 3rd International Conference on Formal Structures for Computation and Deduction (FSCD 2018)_, pp.18:1-18:15, Oxford, UK, July 2018.
+<a name="fscd18">&#91;1&#93;</a> Mirai Ikebuchi and Keisuke Nakano. On repetitive right application of B-terms, _In the proceedings of the 3rd International Conference on Formal Structures for Computation and Deduction (FSCD 2018)_, pp.18:1-18:15, Oxford, UK, July 2018.
 
-<a name="trs08">&#91;2&#93;</a>Keisuke Nakano. &rho;-property of combinators, _29th TRS Meeting_, Tokyo, 2008.
+<a name="trs08">&#91;2&#93;</a> Keisuke Nakano. &rho;-property of combinators, _29th TRS Meeting_, Tokyo, 2008.

@@ -20,6 +20,30 @@ let wid = ref 1
 let show_algo algo_str =
   printf "Cycle detection algorithm: %s@." algo_str
 
+let abort_unless_int63 () =
+  if (-1) lsr 1 + 1 <> 1 lsl 62 then
+    failwith"This mode assumes 63-bit int."
+
+let internal_expr_alist = [
+    ("LL", fun () -> bexpr := (module LevelList));
+    ("BL", fun () -> bexpr := (module NonReuseBytes));
+    ("RB", fun () -> bexpr := (module ReuseBytes));
+    ("RE", fun () -> bexpr := (module ReuseBytesExtensible));
+    ("ZB", fun () -> bexpr := (module ZBytes));
+    ("RL", fun () -> bexpr := (module RevList));
+    ("ZS", fun () -> bexpr := (module MakeBitSeq(ZBits)));
+    ("LS", fun () -> abort_unless_int63 ();
+                     bexpr := (module MakeBitSeq(LBits)));
+    ("IS", fun () -> (* NOT RECOMMENDED *)
+                     bexpr := (module MakeBitSeq(IntBits)));
+    ("DS", fun () -> (* NOT RECOMMENDED *)
+                     abort_unless_int63 ();
+                     bexpr := (module MakeBitSeq(DIntBits)));
+    ("TS", fun () -> (* NOT RECOMMENDED *)
+                     abort_unless_int63 ();
+                     bexpr := (module MakeBitSeq(TIntBits)));
+]
+
 module type Main = sig
   val main: unit -> unit
 end
@@ -86,176 +110,76 @@ module MakeMain(B:Expr) = struct
          printf "%d => [%a] %a@." i 
            (pp_howshow_list exp) (List.rev hss) (pp_expr !wid) exp)
 
-  module type EStoreType = StoreType with type t = B.t
+  let make_stmod: store -> (module StoreType with type t = B.t) =
+    function
+    | Map -> (module MakeMapStore(B))
+    | Hashtbl -> (module MakeHashtblStore(B))
 
-  let make_stmod = function
-    | Map -> (module MakeMapStore(B) : EStoreType)
-    | Hashtbl -> (module MakeHashtblStore(B) : EStoreType)      
-                         
-  let rho_check_naive stmod expr =
+  let make_exprtype expr: (module ExprType with type t = B.t) =
     let next_impure =
       if expr_length expr = 1 then
         let h = expr_height expr-1 in
         (fun e -> B.apply_mono e h) 
       else
         (fun e -> B.apply e expr) in
-    let module N =
-      (Naive (struct
-           type t = B.t
-           let limit = !limit
-           let next_impure = next_impure
-           let next e = next_impure (B.copy e)
-           let copy x = B.copy x
-           let equal = B.equal
-           let display = show_status !display
-         end) ((val stmod : EStoreType))) in
-    N.find_cycle expr
-    
-  let rho_check_floyd expr =
-    let next_impure =
-      if expr_length expr = 1 then
-        let h = expr_height expr-1 in
-        (fun e -> B.apply_mono e h) 
-      else
-        (fun e -> B.apply e expr) in
-    let module R =
-      (Floyd (struct
-           type t = B.t
-           let limit = !limit
-           let next_impure = next_impure
-           let next e = next_impure (B.copy e)
-           let copy x = B.copy x
-           let equal = B.equal
-           let display = show_status !display
-         end)) in
-    R.find_cycle expr
-    
-  let rho_check_brent expr =
-    let next_impure =
-      if expr_length expr = 1 then
-        let h = expr_height expr-1 in
-        (fun e -> B.apply_mono e h)
-      else
-        (fun e -> B.apply e expr) in
-    let module R =
-      (ImprovedBrent (struct
-           type t = B.t
-           let limit = !limit
-           let next_impure = next_impure
-           let next e = next_impure (B.copy e)
-           let copy x = B.copy x
-           let equal = B.equal
-           let display = show_status !display
-         end)) in
-    R.find_cycle expr
-
-  let rho_check_gosper expr =
-    let next_impure =
-      if expr_length expr = 1 then
-        let h = expr_height expr-1 in
-        (fun e -> B.apply_mono e h)
-      else
-        (fun e -> B.apply e expr) in
-    let module R =
-      (Gosper (struct
-           type t = B.t
-           let limit = !limit
-           let next_impure = next_impure
-           let next e = next_impure (B.copy e)
-           let copy x = B.copy x
-           let equal = B.equal
-           let display = show_status !display
-         end)) in
-    R.find_cycle expr
-
-  let rho_check_gosper2 expr =
-    let next_impure =
-      if expr_length expr = 1 then
-        let h = expr_height expr-1 in
-        (fun e -> B.apply_mono e h)
-      else
-        (fun e -> B.apply e expr) in
-    let module R =
-      (ImprovedGosper (struct
-           type t = B.t
-           let limit = !limit
-           let next_impure = next_impure
-           let next e = next_impure (B.copy e)
-           let copy x = B.copy x
-           let equal = B.equal
-           let display = show_status !display
-         end)) in
-    R.find_cycle expr
-    
-  let rho_check_restart_floyd expr fname =
-    let module R =
-      (RestartableFloyd (struct
-           type t = B.t
-           let limit = !limit
-           let next e = B.apply (B.copy e) expr
-           let next_impure x = next x
-           let copy x = B.copy x
-           let equal = (=)
-           let display = show_status !display
-         end)) in
-    R.find_cycle_restart expr fname
-    
-  let rho_check_restart_brent expr fname =
-    let module R =
-      (RestartableBrent (struct
-           type t = B.t
-           let limit = !limit
-           let next e = B.apply (B.copy e) expr
-           let next_impure x = next x
-           let copy x = B.copy x
-           let equal = (=)
-           let display = show_status !display
-         end)) in
-    R.find_cycle_restart expr fname
-    
-  let rho_check_restart_gosper expr fname =
-    failwith "Restartable Gosper's algorithm is not implemented yet."
+    (module (struct
+              type t = B.t
+              let limit = !limit
+              let next_impure = next_impure
+              let next e = next_impure (B.copy e)
+              let copy x = B.copy x
+              let hash = B.hash
+              let equal = B.equal
+              let display = show_status !display
+            end))
 
   let rho_check expr = match !algo with
     | Naive ->
-       let stmod = make_stmod !store in
        show_algo "Naive";
-       rho_check_naive stmod expr
-    | Floyd ->
-       begin match !restart_file with
-             | None ->
-                show_algo "Floyd";
-                rho_check_floyd expr
-             | Some fname ->
-                show_algo "Restartable (Floyd)";
-                rho_check_restart_floyd expr fname end
-    | Brent ->
-       begin match !restart_file with
-             | None ->
-                show_algo "Brent";
-                rho_check_brent expr
-             | Some fname ->
-                show_algo "Restartable (Brent)";
-                rho_check_restart_brent expr fname end
-    | Gosper ->
-       begin match !restart_file with
-             | None ->
-                show_algo "Gosper";
-                rho_check_gosper expr
-             | Some fname ->
-                eprintf "Restartable (Gosper): not implemented yet@.";
-                exit 1 end
-                (*
-                  show_algo "Restartable (Gosper)";
-                  rho_check_restart_gosper expr fname *)
+       let module M =
+         Naive(val make_exprtype expr)(val make_stmod !store) in
+       M.find_cycle expr
+    | Floyd -> begin
+        match !restart_file with
+        | None ->
+           show_algo "Floyd";
+           let module M = Floyd(val make_exprtype expr) in
+           M.find_cycle expr
+        | Some fname ->
+           show_algo "Restartable (Floyd)";
+           let module M = RestartableFloyd(val make_exprtype expr) in
+           M.find_cycle_restart expr fname
+      end
+    | Brent -> begin
+        match !restart_file with
+        | None ->
+           show_algo "Brent";
+           let module M = ImprovedBrent(val make_exprtype expr) in
+           M.find_cycle expr
+        | Some fname ->
+           show_algo "Restartable (Brent)";
+           let module M = RestartableBrent(val make_exprtype expr) in
+           M.find_cycle_restart expr fname
+      end
+    | Gosper -> begin
+        match !restart_file with
+        | None ->
+           show_algo "Gosper";
+           let module M = Gosper(val make_exprtype expr) in
+           M.find_cycle expr
+        | Some fname ->
+           eprintf "Restartable (Gosper): not implemented yet@.";
+           exit 1
+      end
     | Gosper2 ->
        match !restart_file with
-             | None ->
-                show_algo "Gosper2";
-                rho_check_gosper2 expr
-             | Some fname ->
-                eprintf "Restartable (Gosper): not implemented yet@.";
-                exit 1
+       | None ->
+          show_algo "Gosper2";
+          let module M = ImprovedGosper(val make_exprtype expr) in
+          M.find_cycle expr
+       | Some fname ->
+          eprintf "Restartable (Gosper): not implemented yet@.";
+          exit 1
 
   let main () =
     (* Arg.parse speclist anon_fun usage_msg; *)
@@ -272,69 +196,71 @@ module MakeMain(B:Expr) = struct
 
 end
 
+let run_test () =
+  display := Quiet;
+  limit := Pervasives.max_int-1;
+  let tests = [|(6,4); (32,20); (258,36); (4240,5796);
+                (191206,431453)|] in
+  let each_internal_expr str m =
+    let module B = (val !bexpr: Expr) in
+    let module M = MakeMain(B) in
+    for i = 0 to m do
+      printf "Trying -E %s %d ...@." str i;
+      let start, cycle, _ = M.rho_check (B.expr_of_list [i]) in
+      printf "Found! (%d = %d [%d])@." (start+cycle) start cycle;
+      if (start, cycle) <> tests.(i) then begin
+          eprintf "Incorrect at %d!@." i; exit 1
+        end else
+        printf "Correct.@."
+    done in
+  let run_algo (a,m) =
+    algo := a;
+    List.iter (fun (str,set_expr) ->
+      set_expr();
+      let m = match str with
+        | "IS" | "DS" -> min m 3
+        | "TS" -> min m 4
+        | _ -> m in
+      each_internal_expr str m) internal_expr_alist in
+  List.iter run_algo [Naive, 3; Floyd, 4; Brent, 4;
+                      Gosper, 4; Gosper2, 4];
+  printf "========= All tests are passed! =========@."
+
 let rec add_spec keys spec doc speclist = match keys with
   | [] -> speclist
   | key::keys' -> add_spec keys' spec doc ((key,spec,doc)::speclist)
 let rec add_speclist ks_spcl spcl = match ks_spcl with
   | [] -> Arg.align spcl
-  | (keys,spec,doc)::rest -> add_speclist rest (add_spec keys spec (" "^doc) spcl)
-let make_speclist ks_spcl = add_speclist ks_spcl []
+  | (keys,spec,doc)::rest ->
+     add_speclist rest (add_spec keys spec (" "^doc) spcl)
+let make_speclist ks_spcl = List.rev(add_speclist ks_spcl [])
 
 let add_display hs = match !display with
   | Show l -> display := Show (hs::l)
   | _ -> display := Show [hs]
 
-let abort_unless_int63 () =
-  if (-1) lsr 1 + 1 <> 1 lsl 62 then
-    failwith"This mode assumes 63-bit int."
-
 let speclist = make_speclist [
   ["-n"], Arg.Set_int limit,
   "Limit number of self applications (default = "^string_of_int !limit^")";
-  ["-u" (*;"-unbound"*)], Arg.Unit(fun () -> limit := Pervasives.max_int-1),
+  ["-u" (*;"--unbound"*)],
+  Arg.Unit(fun () -> limit := Pervasives.max_int-1),
   "Keep on trying self applications unless the rho-property is found";
 
-  ["-q" (*;"-quiet"*)], Arg.Unit(fun () -> display := Quiet),
+  ["-q" (*;"--quiet"*)], Arg.Unit(fun () -> display := Quiet),
   "Quiet mode";
-  ["-e";"-every"], Arg.Int(fun i -> display := Every i),
+  ["-e" (*;"--every"*)], Arg.Int(fun i -> display := Every i),
   "Display only status every n";
 
-  ["-m"(*;"-map"*)], Arg.Unit(fun () -> store := Map),
+  ["-m"(*;"--map"*)], Arg.Unit(fun () -> store := Map),
   "Use the Map module to store the history (in naive cycle detection)";
 
-  ["-x" (*;"-extreamly-easy-run"*)],
+  ["-x" (*;"--extreamly-easy-run"*)],
   Arg.Unit(fun () ->
       display := Quiet;
       algo := Brent;
       limit := Pervasives.max_int-1;
       bexpr := (module ReuseBytes)),
   "Easy run mode for monomial cases equivalent to -q -u -b -E RB";
-
-  ["-E"], Arg.String(function
-              | "LL" -> bexpr := (module LevelList)
-              | "BL" -> bexpr := (module NonReuseBytes)
-              | "RB" -> bexpr := (module ReuseBytes)
-              | "RE" -> bexpr := (module ReuseBytesExtensible)
-              | "ZB" -> bexpr := (module ZBytes)
-              | "RL" -> bexpr := (module RevList)
-              | "ZS" -> bexpr := (module MakeBitSeq(ZBits))
-              | "LS" -> abort_unless_int63 ();
-                        bexpr := (module MakeBitSeq(LBits))
-              | "IS" -> (* NOT RECOMMENDED *)
-                        bexpr := (module MakeBitSeq(IntBits))  
-              | "DS" -> (* NOT RECOMMENDED *)
-                        abort_unless_int63 ();
-                        bexpr := (module MakeBitSeq(DIntBits))
-              | "TS" -> (* NOT RECOMMENDED *)
-                        abort_unless_int63 ();
-                        bexpr := (module MakeBitSeq(TIntBits))
-              | _ -> raise (Arg.Bad "Unknown internal representation mode")),
-  "Select internal representation of decreasing polynomials (LL|BL|RB|RL|ZS)\n"^
-  "\t\tLL (default): List of the numbers of the same level for respective levels where all numbers <= 2^62-1 (e.g., [1;0;3] stands for 2.2.2.0)\n"^
-  "\tBL: Byte string implementation of LL where all nubmers <= 255\n"^
-  "\tRB: Reuse-as-much-as-possible version of BL\n"^
-  "\tRL: Reversed list (e.g., [0;2;2;2] for 2.2.2.0)\n"^
-  "\tZS: Binary notation as a composition of 0 (\\x.Bx) and 1 (\\x.BxB)";
 
   ["-f";"--floyd"], Arg.Unit(fun () -> algo := Floyd),
   "Use Floyd's cycle-finding algorithm";
@@ -354,6 +280,18 @@ let speclist = make_speclist [
                                    restart_file := Some ""),
   "Similar to '-r' but with specifying no filename";
  
+  ["-E"], Arg.Symbol(List.map fst internal_expr_alist,
+                     fun s -> List.assoc s internal_expr_alist ()),
+  "Select internal representation of decreasing polynomials";
+  (* 
+  "Select internal representation of decreasing polynomials\n"^
+  "\tLL: List of the numbers of the same level for respective levels where all numbers <= 2^62-1 (e.g., [1;0;3] stands for 2.2.2.0)\n"^
+  "\tBL: Byte string implementation of LL where all nubmers <= 255\n"^
+  "\tRB (default): Reuse-as-much-as-possible version of BL\n"^
+  "\tRL: Reversed list (e.g., [0;2;2;2] for 2.2.2.0)\n"^
+  "\tZS: Binary notation as a composition of 0 (\\x.Bx) and 1 (\\x.BxB)";
+   *)
+
   ["-w"(*;"-width"*)], Arg.Set_int wid,
   "Display each digit in the width";
 
@@ -368,6 +306,14 @@ let speclist = make_speclist [
   ["-B";"--bar-chart"], Arg.Unit(fun () -> add_display BarChart),
   "Display as bar chart like histogram the further step of shrink potential";
 
+  ["-t"], Arg.Unit(fun () -> run_test(); exit 0),
+  "Test algorithms and internal expressions";
+
+  (* override to hide default help messages *)
+  ["-help";"--help"],
+  Arg.Unit(fun () -> raise(Arg.Bad"")),
+  " Display this list of options";
+
 ]
 
 let usage_msg = "Usage: "^Sys.argv.(0)
@@ -379,5 +325,5 @@ let () =
   Arg.parse speclist anon_fun usage_msg;
   if !blist = [] then usage ();
   let module B = (val !bexpr: Expr) in
-  let module M = (val (module MakeMain(B)): Main) in
+  let module M = MakeMain(B) in
   M.main ()

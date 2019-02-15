@@ -8,6 +8,7 @@ module type ExprType = sig
   val next : t -> t        (* Its input must be preserved. *)
   val next_impure : t -> t (* Its input may be broken.     *)
   val copy : t -> t        (* Deep copy *)
+  val hash : t -> int
   val equal : t -> t -> bool
   val display : int -> t -> unit
 end
@@ -514,9 +515,9 @@ module Gosper(E:ExprType) = struct
       if E.limit > 1 then
         eprintf "%d terms are all different.@." (2 * E.limit);
       exit 0
-    end else
-      let next = E.next_impure last in
+    end else begin
       E.display i last;
+      let next = E.next_impure last in
       let rec loop j =
         if k <= j then None
         else if E.equal next aset.(j) then Some j
@@ -531,6 +532,7 @@ module Gosper(E:ExprType) = struct
          let i1 = i - 1 in
          let n = i1 land (lnot (j1 - 1)) - (lnot i1) land  j1 in
          i - n, n
+    end
 
   let rec move_until_loop_size i e =
     if i < 1 then e else move_until_loop_size (i-1) (E.next e)
@@ -565,11 +567,14 @@ module ImprovedGosper(E:ExprType) = struct
 
   let log2max = 64
 
-  type bimap = { aset: t array; htbl: (t, int) Hashtbl.t }
+  module H = Hashtbl.Make(E)
+
+  type bimap = { aset: t array; htbl: int H.t }
+
   let add r t {aset;htbl} =
-    Hashtbl.remove htbl aset.(r);
+    H.remove htbl aset.(r);
     aset.(r) <- t;
-    Hashtbl.add htbl t r
+    H.add htbl t r
 
   (* maximum m such that ctz m = j and m < k *)
   let prev_ctz j k =
@@ -582,10 +587,10 @@ module ImprovedGosper(E:ExprType) = struct
       if E.limit > 1 then
         eprintf "%d terms are all different.@." (2 * E.limit);
       exit 0
-    end else
-      let next = E.next_impure last in
+    end else begin
       E.display i last;
-      match Hashtbl.find_opt bimap.htbl next with
+      let next = E.next_impure last in
+      match H.find_opt bimap.htbl next with
       | None ->
          let r = ctz i in
          add r (E.copy next) bimap;
@@ -596,6 +601,7 @@ module ImprovedGosper(E:ExprType) = struct
           * let i1 = i - 1 in
           * let n = i1 land (lnot (j1 - 1)) - (lnot i1) land  j1 in *)
          i - n, n
+    end
 
   let rec find_loop_entry last1 last2 i =
     E.display i last1;
@@ -608,7 +614,7 @@ module ImprovedGosper(E:ExprType) = struct
 
   let find_cycle init =
     let bimap = { aset = Array.make log2max init;
-                  htbl = Hashtbl.create log2max } in
+                  htbl = H.create log2max } in
     let loop_size, i = find_loop bimap (E.copy init) 1 1 in
     printf "Loop detected! (%d = %d [%d])@." (i+loop_size) i loop_size;
     (* let e = move_until_loop_size loop_size (E.copy init) in *)
