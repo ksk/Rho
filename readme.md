@@ -84,20 +84,22 @@ for details of command line options.
 
 ## Conjecture
 
-Keisuke Nakano conjectured in 2008 that
+Keisuke Nakano conjectured in 2008 &#91;[1](#trs08)&#93; that
 
 > a B-term has the &rho;-property if and only if it is equivalent to B<sup>n</sup> B with some n.
 
-in which if-part and only-if-part are both still open &#91;[2](#fscd18),&#91;[1](#trs08)&#93;.
+in which if-part and only-if-part are both still open.
 
 ### if-part
 For every n &le; 6, it is known that B<sup>n</sup> B has the &rho;-property.
 - (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
-- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
-- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
-- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
-- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
-- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
+- (B<sup>1</sup> B)<sub>52</sub> = (B<sup>1</sup> B)<sub>32</sub>
+- (B<sup>2</sup> B)<sub>294</sub> = (B<sup>2</sup> B)<sub>258</sub>
+- (B<sup>3</sup> B)<sub>10036</sub> = (B<sup>3</sup> B)<sub>4240</sub>
+- (B<sup>4</sup> B)<sub>622659</sub> = (B<sup>4</sup> B)<sub>191206</sub>
+- (B<sup>5</sup> B)<sub>1000685878</sub> = (B<sup>5</sup> B)<sub>766241307</sub>
+- (B<sup>6</sup> B)<sub>2980054085040</sub> = (B<sup>6</sup> B)<sub>2641033883877</sub>
+
 All of the above can be confirmed by running the `bpoly` program.
 It took 10 days to check the &rho;-property of the case n=6.
 
@@ -106,11 +108,12 @@ It is shown that the following B-terms do not have the &rho;-property.
 - (B<sup>k</sup> B)<sup>(k+2)n</sup> with k&ge;0 and n&gt;0
 - (B<sup>2</sup> B)<sup>2</sup> o (B<sup>1</sup> B)<sup>2</sup> o (B<sup>0</sup> B)<sup>2</sup>
 - (B<sup>1</sup> B)<sup>3</sup> o (B<sup>0</sup> B)<sup>3</sup>
-The proofs are found in &#91;[2](#fscd18),&#91;[3](#arxiv19)&#93;.
+
+The proofs are found in &#91;[2](#fscd18)&#93; and &#91;[3](#arxiv19)&#93;.
 
 ---
-<a name="fscd18">&#91;1&#93;</a> Mirai Ikebuchi and Keisuke Nakano. On repetitive right application of B-terms, _In the proceedings of the 3rd International Conference on Formal Structures for Computation and Deduction (FSCD 2018)_, pp.18:1-18:15, Oxford, UK, July 2018.
+<a name="fscd18">&#91;1&#93;</a> Mirai Ikebuchi and Keisuke Nakano. [On Repetitive Right Application of B-terms](https://doi.org/10.4230/LIPIcs.FSCD.2018.18), _In the proceedings of the 3rd International Conference on Formal Structures for Computation and Deduction (FSCD 2018)_, pp.18:1-18:15, Oxford, UK, July 2018.
 
-<a name="trs08">&#91;2&#93;</a> Keisuke Nakano. &rho;-property of combinators, _29th TRS Meeting_, Tokyo, 2008.
+<a name="trs08">&#91;2&#93;</a> Keisuke Nakano. &rho;-Property of Combinators, _29th TRS Meeting_, Tokyo, 2008.
 
-<a name="arxiv19">&#91;3&#93;</a> Mirai Ikebuchi and Keisuke Nakano. On properties of B-terms, _CoRR abs/1901.11010_ (2019).
+<a name="arxiv19">&#91;3&#93;</a> Mirai Ikebuchi and Keisuke Nakano. [On Properties of B-terms](http://arxiv.org/abs/1901.11010), _CoRR abs/1901.11010_ (2019).
