@@ -1,3 +1,4 @@
+PREFIX = $(HOME)
 OCAMLC = ocamlc
 OCAMLCP = ocamlcp
 OCAMLOPT = ocamlopt
@@ -15,8 +16,8 @@ all: opt #rho bpoly
 opt: rho.opt bpoly.opt
 
 install: opt test
-	install rho.opt $(HOME)/bin/rho
-	install bpoly.opt $(HOME)/bin/bpoly
+	install rho.opt $(PREFIX)/bin/rho
+	install bpoly.opt $(PREFIX)/bin/bpoly
 
 # tests for bpoly and cycle finding implementation
 test: opt
@@ -29,10 +30,17 @@ rho.opt: store.cmx cycle.cmx rho.ml
 	$(OCAMLOPT) -pp camlp4o $(OCAMLFLAGS) $(OCAMLOPTLIBS) -o $@ $^
 
 bpoly: bpoly.bin bpoly.opt; @true
-bpoly.bin: store.cmo cycle.cmo bexpr.cmo bpoly.ml
+bpoly.bin: store.cmo cycle.cmo bexpr.cmo arithexp.cmo bpoly.ml
 	$(OCAMLFIND) $(OCAMLC) $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLLIBS) zarith.cma -o $@ $^
-bpoly.opt: store.cmx cycle.cmx bexpr.cmx bpoly.ml
+bpoly.opt: store.cmx cycle.cmx bexpr.cmx arithexp.cmx bpoly.ml
 	$(OCAMLFIND) $(OCAMLOPT) -O3 $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLOPTLIBS) zarith.cmxa -o $@ $^
+
+arithexp: arithexp.cmx arithexp.cmo
+
+arithexp.cmx: arithexp.ml
+	$(OCAMLOPT) -pp camlp4o $(OCAMLFLAGS) $(OCAMLOPTLIBS) $^
+arithexp.cmo: arithexp.ml
+	$(OCAMLC) -pp camlp4o $(OCAMLFLAGS) $(OCAMLLIBS) $^
 
 depend: $(SRCS)
 	$(OCAMLDEP) $^ > depend

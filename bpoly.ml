@@ -4,7 +4,8 @@ open Cycle
 open Bexpr
 
 let limit = ref 65535
-type howshow = Sum | Length | Height | Depth | BarChart
+type howshow =
+  Sum | Length | Height | Depth | Value of string | BarChart
 type algo = Naive | Floyd | Brent | Gosper | Gosper2
 type store = Map | Hashtbl
 type display = Quiet | Verbose | Every of int | Show of howshow list
@@ -44,10 +45,6 @@ let internal_expr_alist = [
                      bexpr := (module MakeBitSeq(TIntBits)));
 ]
 
-module type Main = sig
-  val main: unit -> unit
-end
-
 (* Generating Expr-dependent functions for main *)
 module MakeMain(B:Expr) = struct
 
@@ -73,6 +70,15 @@ module MakeMain(B:Expr) = struct
     1 + expr_fold_up max 0 expr (* Bytes.length expr *)
   let expr_depth expr =
     fst (expr_fold_down (fun h (d,i) -> (max (i+h) d, i+1)) (0,0) expr)
+
+  let expr_value str expr =
+    Arithexp.parse
+      (function
+         | "S" -> expr_sum expr
+         | "L" -> expr_length expr
+         | "H" -> expr_height expr
+         | "D" -> expr_depth expr
+         | s -> failwith (s^": unknown variable")) str
     
   let expr_countzeros expr =
     expr_fold_up (fun h c->if h=0 then succ c else c) 0 expr
@@ -90,6 +96,7 @@ module MakeMain(B:Expr) = struct
     | Length -> fprintf prf "L=%3d" (expr_length expr)
     | Height -> fprintf prf "H=%3d" (expr_height expr)
     | Depth -> fprintf prf "D=%3d" (expr_depth expr)
+    | Value s -> fprintf prf "%s=%3d" s (expr_value s expr)
     | BarChart -> pp_bar_chart prf expr
                 
   let pp_howshow_list expr prf = function
@@ -349,15 +356,18 @@ let speclist = make_speclist [
   ["-L";"--length"], Arg.Unit(fun () -> add_display Length),
   "Display its length";
   ["-H";"--height"], Arg.Unit(fun () -> add_display Height),
-  "Display its height";
+  "Display its height (maximum level + 1)";
   ["-D";"--depth"], Arg.Unit(fun () -> add_display Depth),
   "Display its depth";
   ["-B";"--bar-chart"], Arg.Unit(fun () -> add_display BarChart),
   "Display as bar chart like histogram the further step of shrink potential";
 
+  ["-V"], Arg.String(fun s -> add_display (Value s)),
+  "Display its value computed by a given arithmetic expression where S (sum), L (length), H (height), and D (depth) are available. Try -V S -V H -V 'S+L'.";
+
   ["-t"], Arg.Unit(fun () ->
               run_monomial_test(); run_polynomial_test 500;
-              printf "All tests are passed!@."; exit 0),
+              printf "=> All tests are passed!@."; exit 0),
   "Test algorithms and internal expressions";
 
   (* override to hide default help messages *)
