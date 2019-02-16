@@ -50,6 +50,7 @@ for details of command line options.
 The program `bpoly` checks the &rho;-property of a B-term.
 The implementation is based on the normal form of B-terms
 in the 'decreasing polynomial' representation
+[&#91;1&#93;](#fscd18) of the form
 (B<sup>m<sub>1</sub></sup> B) o
 (B<sup>m<sub>2</sub></sup> B) o ... o
 (B<sup>m<sub>k</sub></sup> B),
@@ -71,7 +72,7 @@ run
 $ bpoly 2 2 1 1 0 0
 ```
 which does not terminate up to the given limit of repetition (65535 by default)
-because it does not have the &rho;-property as shown our paper [&#91;1&#93;](#fscd18).
+because it does not have the &rho;-property as shown our paper &#91;[1](#fscd18)&#93;.
 Command line options similar to those of `rho` are available.
 It is better to add the `-f` or `-b` option for larger n so as to use Floyd's or Brent's cycle-finding algorithm.
 Run
@@ -87,9 +88,29 @@ Keisuke Nakano conjectured in 2008 that
 
 > a B-term has the &rho;-property if and only if it is equivalent to B<sup>n</sup> B with some n.
 
-in which if-part and only-if-part are both still open [&#91;2&#93;](#trs08).
+in which if-part and only-if-part are both still open &#91;[2](#fscd18),&#91;[1](#trs08)&#93;.
+
+### if-part
+For every n &le; 6, it is known that B<sup>n</sup> B has the &rho;-property.
+- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
+- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
+- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
+- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
+- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
+- (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
+All of the above can be confirmed by running the `bpoly` program.
+It took 10 days to check the &rho;-property of the case n=6.
+
+### only-if-part
+It is shown that the following B-terms do not have the &rho;-property.
+- (B<sup>k</sup> B)<sup>(k+2)n</sup> with k&ge;0 and n&gt;0
+- (B<sup>2</sup> B)<sup>2</sup> o (B<sup>1</sup> B)<sup>2</sup> o (B<sup>0</sup> B)<sup>2</sup>
+- (B<sup>1</sup> B)<sup>3</sup> o (B<sup>0</sup> B)<sup>3</sup>
+The proofs are found in &#91;[2](#fscd18),&#91;[3](#arxiv19)&#93;.
 
 ---
 <a name="fscd18">&#91;1&#93;</a> Mirai Ikebuchi and Keisuke Nakano. On repetitive right application of B-terms, _In the proceedings of the 3rd International Conference on Formal Structures for Computation and Deduction (FSCD 2018)_, pp.18:1-18:15, Oxford, UK, July 2018.
 
 <a name="trs08">&#91;2&#93;</a> Keisuke Nakano. &rho;-property of combinators, _29th TRS Meeting_, Tokyo, 2008.
+
+<a name="arxiv19">&#91;3&#93;</a> Mirai Ikebuchi and Keisuke Nakano. On properties of B-terms, _CoRR abs/1901.11010_ (2019).
