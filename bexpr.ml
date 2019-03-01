@@ -267,7 +267,7 @@ module ReuseBytes: Expr = struct
       if i > upto then begin
         (* byte array boundary check *)
         if b_size <= b then
-          failwithf"Highest level becomes more than %d."(max_idx-1)();
+          failwithf"The highest level becomes more than %d."(max_idx-1)();
         bytes $|b|<- num;
         { expr with from; upto = b }
       end else if i = b then
@@ -309,16 +309,16 @@ module ReuseBytes: Expr = struct
       if i > upto then begin
         bytes $|b|<- 1;
         { expr with from; upto = b }
-      end else if i = b then begin
+      end else 
         let v = bytes $!! i in
-        (* byte overflow check *)
-        begin if v > 255 then
-          failwithf"The level %d occurs more than 255"(i-from)()end;
-        (* assert (v < 256);  *)
-        bytes $|i|<- succ v;
-        { expr with from; upto }
-      end else
-        loop (succ i) (b + (bytes $!! i)) in
+        if i = b then begin
+          (* byte overflow check *) (* assert (v < 256); *)
+          if v > 255 then
+            failwithf"The level %d occurs more than 255"(i-from)();
+          bytes $|i|<- succ v;
+          { expr with from; upto }
+        end else
+          loop (succ i) (b + v) in
     loop from (b+from)
 
   let apply_mono {bytes;from;upto} h =

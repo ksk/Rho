@@ -47,6 +47,7 @@ module Naive (E:ExprType) (S:StoreType with type t = E.t) = struct
       end else
         let next = E.next_impure last in
         try let prev = S.find next hist in
+            E.display i next;
             (prev, i-prev, next)
         with Not_found ->
           E.display i next;

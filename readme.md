@@ -6,12 +6,21 @@ X<sub>m</sub> and X<sub>n</sub> are &beta;&eta;-equivalent for distinct m and n,
 where X<sub>n</sub> is defined by X<sub>1</sub> = X
 and X<sub>n</sub> = X<sub>n-1</sub> X for n > 1.
 
-Two programs `rho` and `bpoly` are available here.
+Three programs `rho`, `bpoly` and `bmono` are available here.
 
 ## Requirement and how to build
 
-OCaml (&ge; 4.03), CamlP4 and [Zarith](https://github.com/ocaml/Zarith) are required for building the programs.
-Both can be built just by `make`.
+Each program can be built by `make` with the name of the target program,
+e.g., `make rho`.
+You may build all programs just by `make` as far as requirements are satisfied.
+
+- For `rho`,
+OCaml (&ge; 4.03) and CamlP4 are required 
+- For `bpoly`,
+OCaml (&ge; 4.03) and [Zarith](https://github.com/ocaml/Zarith) are required.
+- For `bmono`,
+a standard C compiler (C99) is required.
+
 
 ## Program `rho`
 
@@ -81,8 +90,23 @@ $ bpoly -h
 ```
 for details of command line options.
 
+## Program `bmono`
 
-## Conjecture
+The program `bmono` checks the &rho;-property of a monomial B-term
+of the form B<sup>m</sup> B where m is given as an argument.
+To check the &rho;-property of B<sup>2</sup> B,
+run
+```
+$ bmono 2
+```
+in a similar way to `bpoly`.
+The program `bmono` is written in C and specialized for checking monomial B-terms,
+so it may run faster than `bpoly`.
+The program `bpoly` should be used for observing the divergence of repetitive right application of non-monomial B-terms
+because only monomial B-terms have the &rho;-property
+as conjectured below.
+
+# Conjecture
 
 Keisuke Nakano conjectured in 2008 &#91;[2](#trs08)&#93; that
 
@@ -90,7 +114,7 @@ Keisuke Nakano conjectured in 2008 &#91;[2](#trs08)&#93; that
 
 in which if-part and only-if-part are both still open.
 
-### if-part
+## if-part
 For every n &le; 6, it is known that B<sup>n</sup> B has the &rho;-property.
 - (B<sup>0</sup> B)<sub>10</sub> = (B<sup>0</sup> B)<sub>6</sub>
 - (B<sup>1</sup> B)<sub>52</sub> = (B<sup>1</sup> B)<sub>32</sub>
@@ -101,9 +125,9 @@ For every n &le; 6, it is known that B<sup>n</sup> B has the &rho;-property.
 - (B<sup>6</sup> B)<sub>2980054085040</sub> = (B<sup>6</sup> B)<sub>2641033883877</sub>
 
 All of the above can be confirmed by running the `bpoly` program.
-It took 10 days to check the &rho;-property of the case n=6.
+It took 8 days to check the &rho;-property of the case n=6.
 
-### only-if-part
+## only-if-part
 It is shown that the following B-terms do not have the &rho;-property.
 - (B<sup>k</sup> B)<sup>(k+2)n</sup> with k&ge;0 and n&gt;0
 - (B<sup>2</sup> B)<sup>2</sup> o (B<sup>1</sup> B)<sup>2</sup> o (B<sup>0</sup> B)<sup>2</sup>

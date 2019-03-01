@@ -1,4 +1,5 @@
 PREFIX = $(HOME)
+CC = cc
 OCAMLC = ocamlc
 OCAMLCP = ocamlcp
 OCAMLOPT = ocamlopt
@@ -12,12 +13,14 @@ OCAMLOPTLIBS = unix.cmxa
 
 SRCS = store.ml cycle.ml bexpr.ml
 
-all: opt #rho bpoly
-opt: rho.opt bpoly.opt
+all: rho bpoly bmono
 
-install: opt test
+opt: rho bpoly; @true
+
+install: opt test bmono
 	install rho.opt $(PREFIX)/bin/rho
 	install bpoly.opt $(PREFIX)/bin/bpoly
+	install bmono $(PREFIX)/bin/bmono
 
 # tests for bpoly and cycle finding implementation
 test: opt
@@ -35,12 +38,15 @@ bpoly.bin: store.cmo cycle.cmo bexpr.cmo arithexp.cmo bpoly.ml
 bpoly.opt: store.cmx cycle.cmx bexpr.cmx arithexp.cmx bpoly.ml
 	$(OCAMLFIND) $(OCAMLOPT) -O3 $(OCAMLPKG) $(OCAMLFLAGS) $(OCAMLOPTLIBS) zarith.cmxa -o $@ $^
 
-arithexp: arithexp.cmx arithexp.cmo
+arithexp: arithexp.cmx arithexp.cmo; @true
 
 arithexp.cmx: arithexp.ml
 	$(OCAMLOPT) -pp camlp4o $(OCAMLFLAGS) $(OCAMLOPTLIBS) $^
 arithexp.cmo: arithexp.ml
 	$(OCAMLC) -pp camlp4o $(OCAMLFLAGS) $(OCAMLLIBS) $^
+
+bmono: bmono.c
+	$(CC) -O2 -o $@ $^
 
 depend: $(SRCS)
 	$(OCAMLDEP) $^ > depend
@@ -55,4 +61,4 @@ depend: $(SRCS)
 .mly.mli: ; $(OCAMLYACC) $<
 .mll.ml: ; $(OCAMLLEX) $<
 
-clean:;	rm -rf *~ *.cm* *.tmp *.bin *.opt *.out *.o depend
+clean:;	rm -rf *~ *.cm* *.tmp *.bin *.opt *.out *.o depend bmono

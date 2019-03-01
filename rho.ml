@@ -424,6 +424,6 @@ let _ =
     | Gosper ->
        show_mode "Gosper";
        rho_check_gosper init e in
-    printf "%3d%s => %s@." entry (argnum_str exp) (string_of_expr exp);
     printf "Found! (%d = %d [%d])@." (entry+cyc) entry cyc;
+    printf "%d%s => %s@." entry (argnum_str exp) (string_of_expr exp);
     printf "Elapsed time: %.3f sec.@." (Unix.gettimeofday()-.stime)
