@@ -18,7 +18,8 @@ typedef struct _expr* expr;
 
 /* initialize as expr {0,0,...,0,1} corresponding monomial [bar] */
 void init_expr(expr e, int bar){
-  for(int i=0;i<BARSLEN;++i) e->bars[i] = 0;
+  int i;
+  for(i=0;i<BARSLEN;++i) e->bars[i] = 0;
   e->from = 0;
   e->upto = bar;
   e->bars[bar] = 1;
@@ -37,19 +38,20 @@ void copy_expr(expr e_src, expr e_tgt){
 }
 
 void print_expr(expr e){
+  int i;
   printf("(");
-  for(int i=e->from;i<e->upto;++i) printf("%d,",(int)e->bars[i]);
+  for(i=e->from;i<e->upto;++i) printf("%d,",(int)e->bars[i]);
   printf("%d)",(int)e->bars[e->upto]);
   return;
 }
 
 void print_poly(expr e){
-  int h = e->upto - e->from;
-  for(int j=e->bars[e->upto];j>1;--j) printf("%d.",h);
+  int i, j, h = e->upto - e->from;
+  for(j=e->bars[e->upto];j>1;--j) printf("%d.",h);
   printf("%d",h);
-  for(int i=e->upto-1;i>=e->from;--i) {
+  for(i=e->upto-1;i>=e->from;--i) {
     h = i - e->from; 
-    for(int j=e->bars[i];j>0;--j) printf(".%d",h);
+    for(j=e->bars[i];j>0;--j) printf(".%d",h);
   }
   return;
 }
@@ -67,9 +69,10 @@ int eq_expr(expr e1, expr e2){
 
 /* insertion of many bars (not used the monomial case) */
 void insert_bars(expr e, int bar, int num){
+  int i;
   if(num){
     if(e->from == MAXINDEX){
-      for(int i=e->upto-e->from;i>=0;--i){
+      for(i=e->upto-e->from;i>=0;--i){
         e->bars[i] = e->bars[e->from+i];
         e->bars[e->from+i] = 0;
       }
@@ -90,13 +93,14 @@ void insert_bars(expr e, int bar, int num){
 
 /* insertion of a single bar */
 void insert_one(expr e, int bar){
+  int i;
   if(e->from == MAXINDEX){
     if(e->upto >= BARSLEN) {
       fprintf(stderr,
               "The highest level becomes more than %d.",BARSLEN-MAXINDEX-1);
       exit(1);
     }
-    for(int i=e->upto-e->from;i>=0;--i){
+    for(i=e->upto-e->from;i>=0;--i){
       e->bars[i] = e->bars[e->from+i];
       e->bars[e->from+i] = 0;
     }
@@ -104,7 +108,7 @@ void insert_one(expr e, int bar){
     e->from = 0;
   }
   bar += e->from;
-  int i=e->from;
+  i=e->from;
   while(i<bar){
     bar += e->bars[i];
     ++i;
