@@ -1,17 +1,21 @@
 #include<stdio.h>
 #include<stdlib.h>
 
-#define MAXINDEX (1 << 10)
-#define BARSLEN  (MAXINDEX << 1)
+#define BSIZE (1 << 10)
+#define IMASK (BSIZE-1) /* index mask for circular array */
+#define nth(e,n) e->bars[(e->ofs+n)&IMASK]
 
- /* nat: type of numbers of bars with the same height */
+/* nat: type of numbers of bars with the same height */
 typedef int nat;
 
-// #define DEBUG 
+/* #define DEBUG */
 
 struct _expr {
-  nat bars[BARSLEN];
-  int from, upto;
+  nat bars[BSIZE];
+  int ofs, max;
+  /* ofs : offset */
+  /* max : highest level of decreasing polynomial,
+           so (max + 1) is the length of the active area */
 };
 
 typedef struct _expr* expr;
@@ -19,116 +23,88 @@ typedef struct _expr* expr;
 /* initialize as expr {0,0,...,0,1} corresponding monomial [bar] */
 void init_expr(expr e, int bar){
   int i;
-  for(i=0;i<BARSLEN;++i) e->bars[i] = 0;
-  e->from = 0;
-  e->upto = bar;
+  for(i=0;i<BSIZE;++i) e->bars[i] = 0;
+  e->ofs = 0;
+  e->max = bar;
   e->bars[bar] = 1;
   return;
 }
 
-void copy_expr(expr e_src, expr e_tgt){
-  e_tgt->from = 0;
-  e_tgt->upto = e_src->upto - e_src->from;
+void copy_expr(expr src, expr tgt){
+  tgt->ofs = 0;
+  tgt->max = src->max;
   int i;
   /* copying the meaningful contents */
-  for(i=0;i<=e_tgt->upto;++i) e_tgt->bars[i] = e_src->bars[e_src->from+i];
+  for(i=0;i<=tgt->max;++i)
+    tgt->bars[i] = nth(src,i);
   /* cleaning the remainder */
-  for(;i<BARSLEN;++i) e_tgt->bars[i] = 0;
+  for(;i<BSIZE;++i) tgt->bars[i] = 0;
   return;
 }
 
 void print_expr(expr e){
   int i;
   printf("(");
-  for(i=e->from;i<e->upto;++i) printf("%d,",(int)e->bars[i]);
-  printf("%d)",(int)e->bars[e->upto]);
+  for(i=0;i<e->max;++i) printf("%d,",(int)nth(e,i));
+  printf("%d)[%d,%d]",(int)nth(e,e->max),e->ofs,e->max);
   return;
 }
 
+void print_full_expr(expr e){
+  int i;
+  printf("-");
+  for(i=0;i<BSIZE;++i) printf(" %d -",e->bars[i]);
+  printf("[%d,%d]\n",e->ofs,e->max);
+}
+
 void print_poly(expr e){
-  int i, j, h = e->upto - e->from;
-  for(j=e->bars[e->upto];j>1;--j) printf("%d.",h);
+  int j, h = e->max;
+  for(j=nth(e,e->max);j>1;--j) printf("%d.",h);
   printf("%d",h);
-  for(i=e->upto-1;i>=e->from;--i) {
-    h = i - e->from; 
-    for(j=e->bars[i];j>0;--j) printf(".%d",h);
-  }
+  --h;
+  for(;h>=0;--h)
+    for(j=nth(e,h);j>0;--j) printf(".%d",h);
   return;
 }
 
 int eq_expr(expr e1, expr e2){
-  int i = e1->upto-e1->from;
-  if(i == e2->upto-e2->from){
-    for(;i>=0;--i)
-      if(e1->bars[e1->from+i]!=e2->bars[e2->from+i])
-        return 0;
+  int h = e1->max;
+  if(h==e2->max) {
+    for(;h>=0;--h) if(nth(e1,h)!=nth(e2,h)) return 0;
     return 1;
   }
   return 0;
 }
 
-/* insertion of many bars (not used the monomial case) */
-void insert_bars(expr e, int bar, int num){
-  int i;
-  if(num){
-    if(e->from == MAXINDEX){
-      for(i=e->upto-e->from;i>=0;--i){
-        e->bars[i] = e->bars[e->from+i];
-        e->bars[e->from+i] = 0;
-      }
-      e->upto -= e->from;
-      e->from = 0;
-    }
-    bar += e->from;
-    int i=e->from;
-    while(i<bar){
-      bar += e->bars[i];
-      ++i;
-    }
-    e->bars[i] += num;
-    if(e->upto<i) e->upto = i;
-  }
-  return;
-}
-
 /* insertion of a single bar */
 void insert_one(expr e, int bar){
-  int i;
-  if(e->from == MAXINDEX){
-    if(e->upto >= BARSLEN) {
-      fprintf(stderr,
-              "The highest level becomes more than %d.",BARSLEN-MAXINDEX-1);
-      exit(1);
-    }
-    for(i=e->upto-e->from;i>=0;--i){
-      e->bars[i] = e->bars[e->from+i];
-      e->bars[e->from+i] = 0;
-    }
-    e->upto -= e->from;
-    e->from = 0;
-  }
-  bar += e->from;
-  i=e->from;
+  int i = 0;
   while(i<bar){
-    bar += e->bars[i];
+    bar += nth(e,i);
     ++i;
   }
-  ++e->bars[i];
-  if(e->upto<i) e->upto = i;
+  ++nth(e,i);
+  if(e->max<i) {
+    e->max = i;
+    if(BSIZE<=i) {
+      fprintf(stderr,
+              "The highest level becomes more than %d.",BSIZE-1); exit(1);
+    }
+  }
   return;
 }
 
 void apply_mono(expr e, int bar){
-  bar += e->bars[e->from];
-  e->bars[e->from] = 0;
-  ++e->from;
+  bar += e->bars[e->ofs];
+  e->bars[e->ofs] = 0;
+  e->ofs = (e->ofs+1)&IMASK;
+  --e->max;
   insert_one(e, bar);
   return;
 }
 
 void display(long i, expr e){
   printf("%3ld => ", i); print_poly(e); printf("\n");
-  /* printf(" internal expr: "); print_expr(e); printf("\n"); */
   return;
 }
 
