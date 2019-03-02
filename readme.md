@@ -19,7 +19,7 @@ OCaml (&ge; 4.03) and CamlP4 are required
 - For `bpoly`,
 OCaml (&ge; 4.03) and [Zarith](https://github.com/ocaml/Zarith) are required.
 - For `bmono`,
-a standard C compiler (C99) is required.
+a standard C compiler is required.
 
 
 ## Program `rho`
