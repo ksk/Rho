@@ -17,7 +17,7 @@ You may build all programs just by `make` as far as requirements are satisfied.
 - For `rho`,
 OCaml (&ge; 4.03) and CamlP4 are required 
 - For `bpoly`,
-OCaml (&ge; 4.03) and [Zarith](https://github.com/ocaml/Zarith) are required.
+OCaml (&ge; 4.03), CamlP4 and [Zarith](https://github.com/ocaml/Zarith) are required.
 - For `bmono`,
 a standard C compiler is required.
 
