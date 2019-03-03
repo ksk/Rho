@@ -217,7 +217,108 @@ module ReuseBytesExtensible: Expr = struct
     if b then Format.printf "b_max = %d@." (Bytes.length e1.bytes);
     b *)
 
-end 
+end
+
+module CyclicBytes: Expr = struct
+  (** Use [height+1] bytes from [offset] in [bytes] *)
+  type t = { bytes: Bytes.t; offset: int; height: int }
+
+  let pp_expr prf e =
+    fprintf prf "%S[%d,%d]" (Bytes.to_string e.bytes) e.offset e.height
+
+  let b_size = 1 lsl 10
+  let imask = b_size - 1
+  let (<!!) {bytes;offset} i = bytes $!! (offset+i) land imask
+  let (<|) {bytes;offset} i v = bytes $| (offset+i) land imask |<- v
+  let (|:=) (x:int->unit) = x
+
+  let byte_list_of_expr e =
+    let rec loop i acc =
+      if i < 0 then acc
+      else loop (i-1) ((e<!!i)::acc) in
+    loop e.height []
+
+  let list_of_expr e =
+    let rec loop i acc =
+      if i > e.height then acc
+      else loop (i+1) (repeat (cons i) (e<!!i) acc) in
+    loop 0 []
+
+  let rev_list_of_expr expr = List.rev(list_of_expr expr)
+
+  let compare e1 e2 = 
+    match compare e1.height e2.height with
+    | 0 -> let rec loop i =
+             if i < 0 then 0
+             else match compare (e1<!!i) (e2<!!i) with
+                  | 0 -> loop (i-1)
+                  | c -> c in
+           loop e1.height
+    | c -> c
+
+  let equal e1 e2 = compare e1 e2 = 0
+
+  let hash e = Hashtbl.hash (list_of_expr e)
+
+  let copy e = { e with bytes = Bytes.copy e.bytes }
+  
+  (* copy with shift (not used) *)
+  let copy_blit e =
+    let bytes = Bytes.make b_size '\000' in
+    if e.offset + e.height < b_size then
+      Bytes.blit e.bytes e.offset bytes 0 (succ e.height)
+    else begin
+      Bytes.blit e.bytes e.offset bytes 0 (b_size-e.offset);
+      Bytes.blit e.bytes 0 bytes (b_size-e.offset)
+        (succ e.height + e.offset - b_size)
+    end;
+    { e with bytes; offset = 0 }
+
+  let expr_of_list list =
+    match valid_or_abort list with
+    | [] -> invalid_arg "expr_of_list"
+    | n::_ ->
+       let bytes = Bytes.make b_size '\000' in
+       List.iter (fun n -> bytes $|n|<- succ(bytes $!! n)) list;
+       {bytes; offset=0; height=n}
+
+  let insert_bars e bar num =
+    let rec loop i b =
+      if b <= i then begin
+        e<|b|:= num + (e<!!b);
+        if b <= e.height then e
+        else if b < b_size then { e with height = b }
+        else failwithf "The highest level is beyond %d." (b_size-1) ()
+      end else loop (i+1) (b + (e<!!i)) in
+    loop 0 bar
+
+  let apply e1 e2 =
+    let z1 = e1<!!0 in
+    e1<|0|:= 0;
+    let rec loop b2 e =
+      if b2 < 0 then e
+      else loop (b2-1) (insert_bars e (b2+z1) (e2<!!b2)) in
+    loop e2.height { e1 with offset = succ e1.offset land imask;
+                             height = e1.height-1 }
+
+  let insert_one e bar =
+    let rec loop i b =
+      if b <= i then begin
+        e<|b|:= succ (e<!!b);
+        if b <= e.height then e
+        else if b < b_size then { e with height = b }
+        else failwithf "The highest level is beyond %d." (b_size-1) ()
+      end else loop (i+1) (b + (e<!!i)) in
+    loop 0 bar
+    
+  let apply_mono e b =
+    let z1 = e<!!0 in
+    e<|0|:= 0;
+    insert_one { e with offset = succ e.offset land imask;
+                        height = e.height-1 } (b+z1)
+
+end
+  
 
 module ReuseBytes: Expr = struct
   type t = { bytes: Bytes.t; from: int; upto: int }

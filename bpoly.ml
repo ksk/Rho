@@ -28,6 +28,7 @@ let abort_unless_int63 () =
 let internal_expr_alist = [
     ("LL", fun () -> bexpr := (module LevelList));
     ("BL", fun () -> bexpr := (module NonReuseBytes));
+    ("CB", fun () -> bexpr := (module CyclicBytes));
     ("RB", fun () -> bexpr := (module ReuseBytes));
     ("RE", fun () -> bexpr := (module ReuseBytesExtensible));
     ("ZB", fun () -> bexpr := (module ZBytes));

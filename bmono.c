@@ -52,14 +52,15 @@ void print_expr(expr e){
 
 void print_full_expr(expr e){
   int i;
-  printf("-");
-  for(i=0;i<BSIZE;++i) printf(" %d -",e->bars[i]);
-  printf("[%d,%d]\n",e->ofs,e->max);
+  printf("[%d",e->bars[0]);
+  for(i=1;i<BSIZE;++i) printf(",%d",e->bars[i]);
+  printf("][%d,%d]\n",e->ofs,e->max);
+  return;
 }
 
 void print_poly(expr e){
   int j, h = e->max;
-  for(j=nth(e,e->max);j>1;--j) printf("%d.",h);
+  for(j=nth(e,h);j>1;--j) printf("%d.",h);
   printf("%d",h);
   --h;
   for(;h>=0;--h)
@@ -69,11 +70,9 @@ void print_poly(expr e){
 
 int eq_expr(expr e1, expr e2){
   int h = e1->max;
-  if(h==e2->max) {
-    for(;h>=0;--h) if(nth(e1,h)!=nth(e2,h)) return 0;
-    return 1;
-  }
-  return 0;
+  if(h!=e2->max) return 0;
+  for(;h>=0;--h) if(nth(e1,h)!=nth(e2,h)) return 0;
+  return 1;
 }
 
 /* insertion of a single bar */
@@ -87,8 +86,7 @@ void insert_one(expr e, int bar){
   if(e->max<i) {
     e->max = i;
     if(BSIZE<=i) {
-      fprintf(stderr,
-              "The highest level becomes more than %d.",BSIZE-1); exit(1);
+      fprintf(stderr,"The highest level is beyond %d.",BSIZE-1); exit(1);
     }
   }
   return;
@@ -168,8 +166,7 @@ void find_rho(int bar, long *entry, long *cycle){
 }
 
 void usage(char *argv[]){
-  fprintf(stderr,"Usage: %s N\n", argv[0]); 
-  exit(1);
+  fprintf(stderr,"Usage: %s N\n", argv[0]); exit(1);
 }
 
 int main(int argc, char *argv[]){
