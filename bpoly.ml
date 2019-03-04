@@ -29,6 +29,7 @@ let internal_expr_alist = [
     ("LL", fun () -> bexpr := (module LevelList));
     ("BL", fun () -> bexpr := (module NonReuseBytes));
     ("CB", fun () -> bexpr := (module CyclicBytes));
+    ("CA", fun () -> bexpr := (module CyclicArray));
     ("RB", fun () -> bexpr := (module ReuseBytes));
     ("RE", fun () -> bexpr := (module ReuseBytesExtensible));
     ("ZB", fun () -> bexpr := (module ZBytes));

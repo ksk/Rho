@@ -309,6 +309,100 @@ module CyclicBytes: Expr = struct
                          height = e.height-1 } (b+z) 1
 
 end
+
+module CyclicArray: Expr = struct
+  (** Use an array of length [height+1] from [offset] in [bytes] *)
+  type t = { array: int array; offset: int; height: int }
+
+  (* for debug *)
+  let pp_expr prf e =
+    let len = Array.length e.array in
+    assert(len > 0);
+    fprintf prf "[|@[%d" e.array.(0);
+    for i=1 to len-1 do fprintf prf ";%d" e.array.(i) done;
+    fprintf prf "|][%d,%d]" e.offset e.height
+
+  let a_size = 1 lsl 9
+  let imask = a_size - 1
+  let (<!!) e i = e.array.((e.offset+i)land imask)
+
+  let byte_list_of_expr e =
+    let rec loop i acc =
+      if i < 0 then acc
+      else loop (i-1) ((e<!!i)::acc) in
+    loop e.height []
+
+  let list_of_expr e =
+    let rec loop i acc =
+      if i > e.height then acc
+      else loop (i+1) (repeat (cons i) (e<!!i) acc) in
+    loop 0 []
+
+  let rev_list_of_expr expr = List.rev(list_of_expr expr)
+
+  let compare e1 e2 = 
+    match compare e1.height e2.height with
+    | 0 -> let rec loop i =
+             if i < 0 then 0
+             else match compare (e1<!!i) (e2<!!i) with
+                  | 0 -> loop (i-1)
+                  | c -> c in
+           loop e1.height
+    | c -> c
+
+  let equal e1 e2 = compare e1 e2 = 0
+
+  let hash e = Hashtbl.hash (list_of_expr e)
+
+  let copy e = { e with array = Array.copy e.array }
+  
+  (* copy with shift (not used) *)
+  let copy_blit e =
+    let array = Array.make a_size 0 in
+    if e.offset + e.height < a_size then
+      Array.blit e.array e.offset array 0 (succ e.height)
+    else begin
+      Array.blit e.array e.offset array 0 (a_size-e.offset);
+      Array.blit e.array 0 array (a_size-e.offset)
+        (succ e.height + e.offset - a_size)
+    end;
+    { e with array; offset = 0 }
+
+  let expr_of_list list =
+    match valid_or_abort list with
+    | [] -> invalid_arg "expr_of_list"
+    | n::_ ->
+       let array = Array.make a_size 0 in
+       List.iter (fun n -> array.(n) <- succ array.(n)) list;
+       {array; offset=0; height=n}
+
+  let insert_bars e bar num =
+    let rec loop i b =
+      if b <= i then begin
+        let ob = (e.offset + b) land imask in
+        e.array.(ob) <- num + e.array.(ob);
+        if b <= e.height then e
+        else if b < a_size then { e with height = b }
+        else failwithf "The highest level is beyond %d." (a_size-1) ()
+      end else loop (i+1) (b + (e<!!i)) in
+    loop 0 bar
+
+  let apply e1 e2 =
+    let z1 = e1.array.(e1.offset) in
+    e1.array.(e1.offset) <- 0;
+    let rec loop b2 e =
+      if b2 < 0 then e
+      else loop (b2-1) (insert_bars e (b2+z1) (e2<!!b2)) in
+    loop e2.height { e1 with offset = succ e1.offset land imask;
+                             height = e1.height-1 }
+
+  let apply_mono e b =
+    let z = e.array.(e.offset) in
+    e.array.(e.offset) <- 0;
+    insert_bars { e with offset = succ e.offset land imask;
+                         height = e.height-1 } (b+z) 1
+
+end
   
 
 module ReuseBytes: Expr = struct
