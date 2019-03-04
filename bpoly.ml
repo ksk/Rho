@@ -316,8 +316,8 @@ let speclist = make_speclist [
       display := Quiet;
       algo := Brent;
       limit := Pervasives.max_int-1;
-      bexpr := (module ReuseBytes)),
-  "Easy run mode for monomial cases equivalent to -q -u -b -E RB";
+      bexpr := (module CyclicBytes)),
+  "Easy run mode for monomial cases equivalent to -q -u -b -E CB";
 
   ["-f";"--floyd"], Arg.Unit(fun () -> algo := Floyd),
   "Use Floyd's cycle-finding algorithm";

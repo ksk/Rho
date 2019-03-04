@@ -285,7 +285,8 @@ module CyclicBytes: Expr = struct
   let insert_bars e bar num =
     let rec loop i b =
       if b <= i then begin
-        e<|b|:= num + (e<!!b);
+        let ob = (e.offset + b) land imask in
+        e.bytes $|ob|<- num + (e.bytes$!!ob);
         if b <= e.height then e
         else if b < b_size then { e with height = b }
         else failwithf "The highest level is beyond %d." (b_size-1) ()
@@ -293,29 +294,19 @@ module CyclicBytes: Expr = struct
     loop 0 bar
 
   let apply e1 e2 =
-    let z1 = e1<!!0 in
-    e1<|0|:= 0;
+    let z1 = e1.bytes$!!e1.offset in
+    e1.bytes $|e1.offset|<- 0;
     let rec loop b2 e =
       if b2 < 0 then e
       else loop (b2-1) (insert_bars e (b2+z1) (e2<!!b2)) in
     loop e2.height { e1 with offset = succ e1.offset land imask;
                              height = e1.height-1 }
 
-  let insert_one e bar =
-    let rec loop i b =
-      if b <= i then begin
-        e<|b|:= succ (e<!!b);
-        if b <= e.height then e
-        else if b < b_size then { e with height = b }
-        else failwithf "The highest level is beyond %d." (b_size-1) ()
-      end else loop (i+1) (b + (e<!!i)) in
-    loop 0 bar
-    
   let apply_mono e b =
-    let z1 = e<!!0 in
-    e<|0|:= 0;
-    insert_one { e with offset = succ e.offset land imask;
-                        height = e.height-1 } (b+z1)
+    let z = e.bytes$!!e.offset in
+    e.bytes $|e.offset|<- 0;
+    insert_bars { e with offset = succ e.offset land imask;
+                         height = e.height-1 } (b+z) 1
 
 end
   
