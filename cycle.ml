@@ -244,29 +244,32 @@ module Brent (E:ExprType) = struct
 
   (* Find loop by Brent's cycle-finding algorithm                    *)
   (* to return k and pow such that A(pow=2**n) = A(pow+k) (1<=k<pow) *)
-  let rec find_loop last1 last2 i pow =
-    if pow > E.limit then begin
-      if E.limit > 1 then
-        eprintf "%d terms are all different.@." (pow+i);
-      exit 0
-    end else
-      if E.equal last1 last2 then (i,pow)
+  let find_loop_body find_loop last1 last2 i pow = 
+    if E.equal last1 last2 then (i,pow)
+    else
+      if i = pow then
+        let next2 = E.next last2 in
+        E.display (pow+i+1) next2;
+        find_loop last2 next2 1 (pow lsl 1)
       else
-        if i = pow then
-          let next2 = E.next last2 in
-          E.display (pow+i+1) next2;
-          find_loop last2 next2 1 (pow lsl 1)
-        else
-          let next2 = E.next_impure last2 in
-          E.display (pow+i+1) next2;
-          find_loop last1 next2 (succ i) pow
-        (* let next2 = E.next last2 in
-         * E.display (pow+i+1) next2;
-         * if i = pow then
-         *   find_loop last2 next2 1 (pow lsl 1)
-         * else
-         *   find_loop last1 next2 (succ i) pow *)
-                    
+        let next2 = E.next_impure last2 in
+        E.display (pow+i+1) next2;
+        find_loop last1 next2 (succ i) pow
+
+  let find_loop =
+    if E.limit + 1 < E.limit then (* E.limit is max_int *)
+      let rec loop last1 last2 i pow = 
+        find_loop_body loop last1 last2 i pow in
+      loop
+    else 
+      let rec loop last1 last2 i pow =
+        if pow > E.limit then begin
+          if E.limit > 1 then
+            eprintf "%d terms are all different.@." (pow+i);
+          exit 0
+        end else find_loop_body loop last1 last2 i pow in
+      loop
+
   let rec find_kth x1 k =
     if k <= 1 then x1 else find_kth (E.next_impure x1) (k-1)
 
