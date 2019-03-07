@@ -407,10 +407,7 @@ let _ =
   Arg.parse speclist anon_fun usage_msg;
   if String.length !expr_str = 0 then usage () else
     let e = parse !expr_str in
-    printf "e=%s@." (string_of_expr e);
-    printf "init_exp=%s@." (string_of_expr !init_exp);
     let init = normalize_app !init_exp e in
-    printf "init=%s@." (string_of_expr init);
     let show_mode mode_str =
       printf "Cycle detection mode: %s@." mode_str in
     let stime = Unix.gettimeofday() in
