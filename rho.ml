@@ -139,7 +139,7 @@ let rec reduce_if_free n = function
       |  1 (* n > m *) -> e
       | -1 (* n < m *) -> Index (pred m)
       | _  (* n = m *) -> raise Not_free end
-  | Lambda(m,e) -> Lambda(n,reduce_if_free (n+m) e)
+  | Lambda(m,e) -> Lambda(m, reduce_if_free (n+m) e)
   | App(e1,e2) -> App(reduce_if_free n e1, reduce_if_free n e2)
 
 let rec eta = function
@@ -147,7 +147,7 @@ let rec eta = function
   | Lambda(n,e) ->
       if n > 0 then match eta e with
         | App(e1, Index 1) as app ->
-            begin try eta(Lambda(pred n,reduce_if_free 1 e1))
+            begin try eta(Lambda(pred n, reduce_if_free 1 e1))
             with Not_free -> Lambda(n, app) end
         | e -> Lambda(n,e)
       else eta e
@@ -407,7 +407,10 @@ let _ =
   Arg.parse speclist anon_fun usage_msg;
   if String.length !expr_str = 0 then usage () else
     let e = parse !expr_str in
+    printf "e=%s@." (string_of_expr e);
+    printf "init_exp=%s@." (string_of_expr !init_exp);
     let init = normalize_app !init_exp e in
+    printf "init=%s@." (string_of_expr init);
     let show_mode mode_str =
       printf "Cycle detection mode: %s@." mode_str in
     let stime = Unix.gettimeofday() in
