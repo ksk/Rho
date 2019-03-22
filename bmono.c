@@ -1,9 +1,19 @@
 #include<stdio.h>
 #include<stdlib.h>
+#include<stdarg.h>
 
-#define BSIZE (1 << 10)
+#define BBITS 10
+#define BSIZE (1 << BBITS)
 #define IMASK (BSIZE-1) /* index mask for circular array */
 #define nth(e,n) e->bars[(e->ofs+n)&IMASK]
+
+void abortf(const char *format, ...){
+  va_list ap;
+  va_start(ap, format);
+  vfprintf(stderr, format, ap);
+  va_end(ap);
+  exit(1);
+}
 
 /* nat: type of numbers of bars with the same height */
 typedef int nat;
@@ -85,9 +95,7 @@ void insert_one(expr e, int bar){
   ++nth(e,i);
   if(e->max<i) {
     e->max = i;
-    if(BSIZE<=i) {
-      fprintf(stderr,"The highest level is beyond %d.",BSIZE-1); exit(1);
-    }
+    if(BSIZE<=i) abortf("The highest level is beyond %d.\n",BSIZE-1);
   }
   return;
 }
@@ -138,11 +146,12 @@ void find_rho(int bar, long *entry, long *cycle){
   
   /* finding the entry point */
   /* - (1) finding (*cycle+1)-th expression */
-  if(*cycle < pow) {
+  if(*cycle < pow) { 
     init_expr(e_tmp,bar);
-    for(i=1;i<=*cycle;++i) apply_mono(e_tmp, bar);
+    i = 1;
   } else
-    for(i=pow;i<=*cycle;++i) apply_mono(e_tmp, bar);
+    i = pow;
+  for(;i<=*cycle;++i) apply_mono(e_tmp, bar);
   /* e_tmp: expr at *cycle+1 */
 
   /* - (2) finding the entry point by shifting two expressions */
@@ -166,7 +175,7 @@ void find_rho(int bar, long *entry, long *cycle){
 }
 
 void usage(char *argv[]){
-  fprintf(stderr,"Usage: %s N\n", argv[0]); exit(1);
+  abortf("Usage: %s N\n", argv[0]);
 }
 
 int main(int argc, char *argv[]){
