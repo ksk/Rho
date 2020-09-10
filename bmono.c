@@ -138,12 +138,13 @@ void fgets_expr(FILE*fp, expr*e){
 }
 
 /* Save a log file for find_rho */
-void find_rho_save(long i, long pow, expr e, expr e_tmp){
+void find_rho_save(long i, long pow, long cycle, expr e, expr e_tmp){
 /*  printf("saved:\n"); display(i,e); display(pow,e_tmp); */
   FILE *fp = fopen(SAVEFILE, "w");
   if(fp==NULL) abortf("find_rho_save failed.\n");
   fwrite(&i, sizeof(long), 1, fp);
   fwrite(&pow, sizeof(long), 1, fp);
+  fwrite(&cycle, sizeof(long), 1, fp);
   /* fprintf(fp, "%ld,%ld:",i,pow); */
   fputs_expr(fp, e);
   fputs_expr(fp, e_tmp);
@@ -153,11 +154,12 @@ void find_rho_save(long i, long pow, expr e, expr e_tmp){
   return;
 }
 
-void find_rho_load(long*_i, long*_pow, expr*_e, expr*_e_tmp){
+void find_rho_load(long*_i, long*_pow, long *_cycle, expr*_e, expr*_e_tmp){
   FILE *fp = fopen(SAVEFILE, "r");
   if(fp==NULL) abortf("find_rho_load failed.\n");
   fread(_i, sizeof(long), 1, fp);
   fread(_pow, sizeof(long), 1, fp);
+  fread(_cycle, sizeof(long), 1, fp);
   /* fscanf(fp, "%ld,%ld:",_i,_pow); */
   fgets_expr(fp, _e);
   fgets_expr(fp, _e_tmp);
@@ -184,7 +186,7 @@ void find_rho(int bar, long *entry, long *cycle){
   /* loop detection */
   display(1, e);
   apply_mono(e, bar);
-  if(resume) find_rho_load(&i, &pow, &e, &e_tmp);
+  if(resume) find_rho_load(&i, &pow, cycle, &e, &e_tmp);
   if(pow==0) goto find_entry;
   while(!eq_expr(e,e_tmp)){
     /* e_tmp: expr at the last power of 2 */
@@ -193,7 +195,7 @@ void find_rho(int bar, long *entry, long *cycle){
       display(i, e);
     #endif
     #ifdef SAVEMODE
-      if(!(i&SAVEFREQ)) find_rho_save(i, pow, e, e_tmp);
+      if(!(i&SAVEFREQ)) find_rho_save(i, pow, 0, e, e_tmp);
     #endif
     if(i==pow) {
       pow <<= 1;
@@ -228,7 +230,7 @@ find_entry:
       display(i,e); display(i+*cycle,e_tmp);
     #endif
     #ifdef SAVEMODE
-      if(!(i&SAVEFREQ)) find_rho_save(i, 0, e, e_tmp);
+      if(!(i&SAVEFREQ)) find_rho_save(i, 0, *cycle, e, e_tmp);
     #endif
     apply_mono(e, bar);
     apply_mono(e_tmp, bar);
