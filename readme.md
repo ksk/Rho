@@ -133,11 +133,11 @@ It is shown that the following B-terms do not have the &rho;-property.
 - (B<sup>2</sup> B)<sup>2</sup> o (B<sup>1</sup> B)<sup>2</sup> o (B<sup>0</sup> B)<sup>2</sup>
 - (B<sup>1</sup> B)<sup>3</sup> o (B<sup>0</sup> B)<sup>3</sup>
 
-The proofs are found in &#91;[1](#fscd18)&#93; and &#91;[3](#arxiv19)&#93;.
+The proofs are found in &#91;[1](#fscd18)&#93; and &#91;[3](#lmcs20)&#93;.
 
 ---
 <a name="fscd18">&#91;1&#93;</a> Mirai Ikebuchi and Keisuke Nakano. [On Repetitive Right Application of B-terms](https://doi.org/10.4230/LIPIcs.FSCD.2018.18), _In the proceedings of [the 3rd International Conference on Formal Structures for Computation and Deduction (FSCD 2018)](https://www.cs.le.ac.uk/events/fscd2018/)_, pp.18:1-18:15, Oxford, UK, July 2018.
 
 <a name="trs08">&#91;2&#93;</a> Keisuke Nakano. &rho;-Property of Combinators, _[29th TRS Meeting](http://www.jaist.ac.jp/~hirokawa/trs-meeting/original/29.html)_, Tokyo, 2008.
 
-<a name="arxiv19">&#91;3&#93;</a> Mirai Ikebuchi and Keisuke Nakano. [On Properties of B-terms](http://arxiv.org/abs/1901.11010), _CoRR abs/1901.11010_ (2019), submitted to _[LMCS](https://lmcs.episciences.org)_.
+<a name="lmcs20">&#91;3&#93;</a> Mirai Ikebuchi and Keisuke Nakano. [On Properties of B-terms](https://doi.org/10.23638/LMCS-16(2:8)2020), _[Logical Methods in Computer Science (LMCS)](https://lmcs.episciences.org)_, Volume 16, Issue 2, June 2020.
