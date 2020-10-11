@@ -8,16 +8,17 @@
 #define IMASK (BSIZE-1) /* index mask for circular array */
 #define nth(e,n) e->bars[(e->ofs+n)&IMASK]
 
-#define SAVEFREQ (1 << 20) - 1
+#define SAVEFREQ (1 << 20) - 1 /* saving the status only when i&SAVEFREQ==0 */
 #define SAVEFILE "bmono.log"
 #define LASTFILE "bmono.tmp"
 #define SAVEMODE
 
-clock_t start;
-double passed; /* passed time (sec) */
+clock_t start;	/* start time */
+double passed;	/* passed time (sec) */
 
-int resume; /* use the log file if resume > 0 */
+int resume;	/* use the log file if resume > 0 */
 
+/* Abort the program */ 
 void abortf(const char *format, ...){
   va_list ap;
   va_start(ap, format);
@@ -186,8 +187,10 @@ void find_rho(int bar, long *entry, long *cycle){
   /* loop detection */
   display(1, e);
   apply_mono(e, bar);
-  if(resume) find_rho_load(&i, &pow, cycle, &e, &e_tmp);
-  if(pow==0) goto find_entry;
+  #ifdef SAVEMODE
+    if(resume) find_rho_load(&i, &pow, cycle, &e, &e_tmp);
+    if(pow==0) goto find_entry;
+  #endif
   while(!eq_expr(e,e_tmp)){
     /* e_tmp: expr at the last power of 2 */
     /* e:     expr at i                   */
@@ -245,7 +248,7 @@ find_entry:
 }
 
 void usage(char *argv[]){
-  abortf("Usage: %s N [-]\n  - forces the resume mode.", argv[0]);
+  abortf("Usage: %s N [-]\n  - forces the resume mode.\n", argv[0]);
 }
 
 int main(int argc, char *argv[]){
