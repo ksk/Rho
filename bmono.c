@@ -10,13 +10,13 @@
 
 #define SAVEFREQ (1 << 20) - 1 /* saving the status only when i&SAVEFREQ==0 */
 #define SAVEFILE "bmono.log"
-#define LASTFILE "bmono.tmp"
 #define SAVEMODE
 
 clock_t start;	/* start time */
 double passed;	/* passed time (sec) */
 
 int resume;	/* use the log file if resume > 0 */
+char* logfile;
 
 /* Abort the program */ 
 void abortf(const char *format, ...){
@@ -138,6 +138,7 @@ void fgets_expr(FILE*fp, expr*e){
   return;
 }
 
+#ifdef SAVEMODE
 /* Save a log file for find_rho */
 void find_rho_save(long i, long pow, long cycle, expr e, expr e_tmp){
 /*  printf("saved:\n"); display(i,e); display(pow,e_tmp); */
@@ -176,6 +177,7 @@ void find_rho_load(long*_i, long*_pow, long *_cycle, expr*_e, expr*_e_tmp){
   printf("%.2f sec passed.\n", passed);
   return;
 }
+#endif
 
 void find_rho(int bar, long *entry, long *cycle){
   long i=2, pow=2;
@@ -248,7 +250,12 @@ find_entry:
 }
 
 void usage(char *argv[]){
-  abortf("Usage: %s N [-]\n  - forces the resume mode.\n", argv[0]);
+  #ifdef SAVEMODE
+    abortf("Usage:\n  %s N\tfor the first run\n  %s -N\tto resume the previous run\nThe status is saved in %s. The same N must be given when resuming.\n",
+           argv[0], argv[0], SAVEFILE);
+  #else
+    abortf("Usage: %s N\n", argv[0]);
+  #endif
 }
 
 int main(int argc, char *argv[]){
@@ -261,7 +268,14 @@ int main(int argc, char *argv[]){
   if(argc<2) usage(argv);
   else {
     bar = atoi(argv[1]);
-    if(argc >= 3) resume = 1;
+    if(bar<0) {
+      #ifdef SAVEMODE
+        resume = 1;
+        bar *= -1;
+      #else
+        usage(argv);
+      #endif
+    }
   }
 
   find_rho(bar,&entry,&cycle);
