@@ -1,12 +1,24 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<stdarg.h>
+#include<time.h>
 
 #define BBITS 10
 #define BSIZE (1 << BBITS)
 #define IMASK (BSIZE-1) /* index mask for circular array */
 #define nth(e,n) e->bars[(e->ofs+n)&IMASK]
 
+#define SAVEFREQ (1 << 20) - 1 /* saving the status only when i&SAVEFREQ==0 */
+#define SAVEFILE "bmono.log"
+#define SAVEMODE
+
+clock_t start;	/* start time */
+double passed;	/* passed time (sec) */
+
+int resume;	/* use the log file if resume > 0 */
+char* logfile;
+
+/* Abort the program */ 
 void abortf(const char *format, ...){
   va_list ap;
   va_start(ap, format);
@@ -114,6 +126,59 @@ void display(long i, expr e){
   return;
 }
 
+void fputs_expr(FILE*fp, expr e){
+  fwrite(e->bars, sizeof(nat), BSIZE, fp);
+  fprintf(fp,",%d,%d", e->ofs, e->max);
+  return;
+}
+
+void fgets_expr(FILE*fp, expr*e){
+  fread((*e)->bars, sizeof(nat), BSIZE, fp);
+  fscanf(fp,",%d,%d", &(*e)->ofs, &(*e)->max);
+  return;
+}
+
+#ifdef SAVEMODE
+/* Save a log file for find_rho */
+void find_rho_save(long i, long pow, long cycle, expr e, expr e_tmp){
+/*  printf("saved:\n"); display(i,e); display(pow,e_tmp); */
+  FILE *fp = fopen(SAVEFILE, "w");
+  if(fp==NULL) abortf("find_rho_save failed.\n");
+  fwrite(&i, sizeof(long), 1, fp);
+  fwrite(&pow, sizeof(long), 1, fp);
+  fwrite(&cycle, sizeof(long), 1, fp);
+  /* fprintf(fp, "%ld,%ld:",i,pow); */
+  fputs_expr(fp, e);
+  fputs_expr(fp, e_tmp);
+  double p = passed + (double)(clock()-start)/CLOCKS_PER_SEC;
+  fwrite(&p, sizeof(double), 1, fp);
+  fclose(fp);
+  return;
+}
+
+void find_rho_load(long*_i, long*_pow, long *_cycle, expr*_e, expr*_e_tmp){
+  FILE *fp = fopen(SAVEFILE, "r");
+  if(fp==NULL) abortf("find_rho_load failed.\n");
+  fread(_i, sizeof(long), 1, fp);
+  fread(_pow, sizeof(long), 1, fp);
+  fread(_cycle, sizeof(long), 1, fp);
+  /* fscanf(fp, "%ld,%ld:",_i,_pow); */
+  fgets_expr(fp, _e);
+  fgets_expr(fp, _e_tmp);
+  fread(&passed, sizeof(double), 1, fp);
+  fclose(fp);
+  /* display status */
+  printf("Resuming from\n");
+  display(*_i,*_e);
+  if(*_pow)
+    printf("in finding-cycle mode.\n");
+  else
+    printf("in finding-entry mode.\n");
+  printf("%.2f sec passed.\n", passed);
+  return;
+}
+#endif
+
 void find_rho(int bar, long *entry, long *cycle){
   long i=2, pow=2;
   expr e = (expr)malloc(sizeof(struct _expr));
@@ -124,11 +189,18 @@ void find_rho(int bar, long *entry, long *cycle){
   /* loop detection */
   display(1, e);
   apply_mono(e, bar);
+  #ifdef SAVEMODE
+    if(resume) find_rho_load(&i, &pow, cycle, &e, &e_tmp);
+    if(pow==0) goto find_entry;
+  #endif
   while(!eq_expr(e,e_tmp)){
     /* e_tmp: expr at the last power of 2 */
     /* e:     expr at i                   */
     #ifdef DEBUG
       display(i, e);
+    #endif
+    #ifdef SAVEMODE
+      if(!(i&SAVEFREQ)) find_rho_save(i, pow, 0, e, e_tmp);
     #endif
     if(i==pow) {
       pow <<= 1;
@@ -157,10 +229,13 @@ void find_rho(int bar, long *entry, long *cycle){
   /* - (2) finding the entry point by shifting two expressions */
   init_expr(e, bar);
   i = 1;
+find_entry:
   while(!eq_expr(e,e_tmp)){
     #ifdef DEBUG
-      display(i,e);
-      display(i+*cycle,e_tmp);
+      display(i,e); display(i+*cycle,e_tmp);
+    #endif
+    #ifdef SAVEMODE
+      if(!(i&SAVEFREQ)) find_rho_save(i, 0, *cycle, e, e_tmp);
     #endif
     apply_mono(e, bar);
     apply_mono(e_tmp, bar);
@@ -175,15 +250,37 @@ void find_rho(int bar, long *entry, long *cycle){
 }
 
 void usage(char *argv[]){
-  abortf("Usage: %s N\n", argv[0]);
+  #ifdef SAVEMODE
+    abortf("Usage:\n  %s N\tfor the first run\n  %s -N\tto resume the previous run\nThe status is saved in %s. The same N must be given when resuming.\n",
+           argv[0], argv[0], SAVEFILE);
+  #else
+    abortf("Usage: %s N\n", argv[0]);
+  #endif
 }
 
 int main(int argc, char *argv[]){
   int bar;
   long entry, cycle;
+  start = clock();
+  passed = 0;
+  resume = 0;
+  
   if(argc<2) usage(argv);
-  else bar = atoi(argv[1]);
+  else {
+    bar = atoi(argv[1]);
+    if(bar<0) {
+      #ifdef SAVEMODE
+        resume = 1;
+        bar *= -1;
+      #else
+        usage(argv);
+      #endif
+    }
+  }
 
   find_rho(bar,&entry,&cycle);
+
+  printf("CPU time: %.2f sec\n",
+         passed + (double)(clock()-start)/CLOCKS_PER_SEC);
   return 0;
 }
