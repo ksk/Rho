@@ -28,9 +28,9 @@ test: opt
 
 rho: rho.opt; @true 
 rho.bin: store.cmo cycle.cmo rho.ml
-	$(OCAMLC) -pp camlp4o $(OCAMLFLAGS) $(OCAMLLIBS) -o $@ $^
+	$(OCAMLC) -pp camlp5o $(OCAMLFLAGS) $(OCAMLLIBS) -o $@ $^
 rho.opt: store.cmx cycle.cmx rho.ml
-	$(OCAMLOPT) -pp camlp4o $(OCAMLFLAGS) $(OCAMLOPTLIBS) -o $@ $^
+	$(OCAMLOPT) -pp camlp5o $(OCAMLFLAGS) $(OCAMLOPTLIBS) -o $@ $^
 
 bpoly: bpoly.bin bpoly.opt; @true
 bpoly.bin: store.cmo cycle.cmo bexpr.cmo arithexp.cmo bpoly.ml
@@ -41,9 +41,9 @@ bpoly.opt: store.cmx cycle.cmx bexpr.cmx arithexp.cmx bpoly.ml
 arithexp: arithexp.cmx arithexp.cmo; @true
 
 arithexp.cmx: arithexp.ml
-	$(OCAMLOPT) -pp camlp4o $(OCAMLFLAGS) $(OCAMLOPTLIBS) $^
+	$(OCAMLOPT) -pp camlp5o $(OCAMLFLAGS) $(OCAMLOPTLIBS) $^
 arithexp.cmo: arithexp.ml
-	$(OCAMLC) -pp camlp4o $(OCAMLFLAGS) $(OCAMLLIBS) $^
+	$(OCAMLC) -pp camlp5o $(OCAMLFLAGS) $(OCAMLLIBS) $^
 
 bmono: bmono.c
 	$(CC) -O2 -o $@ $^

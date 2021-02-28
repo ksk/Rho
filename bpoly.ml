@@ -208,7 +208,7 @@ end
 
 let run_monomial_test () =
   display := Quiet;
-  limit := Pervasives.max_int-1;
+  limit := Stdlib.max_int-1;
   (* Known results in monomial cases *)
   let tests = [|(6,4); (32,20); (258,36); (4240,5796);
                 (191206,431453); (766241307,234444571);
@@ -301,7 +301,7 @@ let speclist = make_speclist [
   ["-n"], Arg.Set_int limit,
   "Limit number of self applications (default = "^string_of_int !limit^")";
   ["-u" (*;"--unbound"*)],
-  Arg.Unit(fun () -> limit := Pervasives.max_int-1),
+  Arg.Unit(fun () -> limit := Stdlib.max_int-1),
   "Keep on trying self applications unless the rho-property is found";
 
   ["-q" (*;"--quiet"*)], Arg.Unit(fun () -> display := Quiet),
@@ -316,7 +316,7 @@ let speclist = make_speclist [
   Arg.Unit(fun () ->
       display := Quiet;
       algo := Brent;
-      limit := Pervasives.max_int-1;
+      limit := Stdlib.max_int-1;
       bexpr := (module CyclicBytes)),
   "Easy run mode for monomial cases equivalent to -q -u -b -E CB";
 
